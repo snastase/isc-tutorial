@@ -1,2 +1,2 @@
-# ISC-tutorial
+# isc-tutorial
 Intersubject correlation (ISC) tutorial
