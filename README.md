@@ -1,2 +1,2 @@
-# isc-tutorial
-Intersubject correlation (ISC) tutorial
+# Intersubject correlation (ISC) tutorial
+This repo accompanies the manuscript "Measuring shared responses across subjects using intersubject correlation" by Nastase, Gazzola, Hasson, and Keysers. Includes a Jupyter Notebook tutorial introducing basic intersubject correlation (ISC) analyses and statistical tests as implemented in Python using the Brain Imaging Analysis Kit ([BrainIAK](http://brainiak.org/)), as well as scripts used for generating manuscript figures.
