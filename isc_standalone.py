@@ -18,6 +18,29 @@ Functions for computing intersubject correlation (ISC) and related
 analyses (e.g., intersubject funtional correlations; ISFC), as well
 as statistical tests designed specifically for ISC analyses.
 
+The implementation is based on the work in [Hasson2004]_, [Kauppi2014]_,
+[Simony2016]_, and [Chen2016]_.
+
+.. [Chen2016] "Untangling the relatedness among correlations, part I:
+   nonparametric approaches to inter-subject correlation analysis at the
+   group level.", G. Chen, Y. W. Shin, P. A. Taylor, D. R. Glen, R. C.
+   Reynolds, R. B. Israel, R. W. Cox, 2016, NeuroImage, 142, 248-259.
+   https://doi.org/10.1016/j.neuroimage.2016.05.023
+
+.. [Hasson2004] "Intersubject synchronization of cortical activity
+   during natural vision.", U. Hasson, Y. Nir, I. Levy, G. Fuhrmann,
+   R. Malach, 2004, Science, 303, 1634-1640.
+   https://doi.org/10.1126/science.1089506
+
+.. [Kauppi2014] "A versatile software package for inter-subject
+   correlation based analyses of fMRI.", J. P. Kauppi, J. Pajula,
+   J. Tohka, 2014, Frontiers in Neuroinformatics, 8, 2.
+   https://doi.org/10.3389/fninf.2014.00002
+
+.. [Simony2016] "Dynamic reconfiguration of the default mode network
+   during narrative comprehension.", E. Simony, C. J. Honey, J. Chen, O.
+   Lositsky, Y. Yeshurun, A. Wiesel, U. Hasson, 2016, Nature Communications,
+   7, 12141. https://doi.org/10.1038/ncomms12141
 """
 
 # Authors: Sam Nastase, Christopher Baldassano, Qihong Lu,
@@ -30,6 +53,11 @@ from scipy.spatial.distance import squareform
 from scipy.stats import pearsonr
 from scipy.fftpack import fft, ifft
 import itertools as it
+import nibabel as nib
+from nibabel.spatialimages import SpatialImage
+from pathlib import Path
+from typing import Callable, Iterable, List, Type, TypeVar, Union
+import itertools
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +87,7 @@ def isc(data, pairwise=False, summary_statistic=None):
     Output is an ndarray where the first dimension is the number of subjects
     or pairs and the second dimension is the number of voxels (or ROIs).
 
-    The implementation is based on the following publication:
-
-    .. [Hasson2004] "Intersubject synchronization of cortical activity
-      during natural vision.", U. Hasson, Y. Nir, I. Levy, G. Fuhrmann,
-      R. Malach, 2004, Science, 303, 1634-1640.
+    The implementation is based on the work in [Hasson2004]_.
 
     Parameters
     ----------
@@ -142,12 +166,7 @@ def isfc(data, pairwise=False, summary_statistic=None):
     supplied; otherwise output is n_voxels by n_voxels by n_subjects (or
     n_pairs) array.
 
-    The implementation is based on the following publication:
-
-    .. [Simony2016] "Dynamic reconfiguration of the default mode network
-      during narrative comprehension.", E. Simony, C. J. Honey, J. Chen, O.
-      Lositsky, Y. Yeshurun, A. Wiesel, U. Hasson, 2016, Nature Communications,
-      7, 12141.
+    The implementation is based on the work in [Simony2016]_.
 
     Parameters
     ----------
@@ -175,6 +194,7 @@ def isfc(data, pairwise=False, summary_statistic=None):
         isfcs = np.corrcoef(np.ascontiguousarray(data[..., 0].T),
                             np.ascontiguousarray(data[..., 1].T))[:n_voxels,
                                                                   n_voxels:]
+
         isfcs = (isfcs + isfcs.T) / 2
         assert isfcs.shape == (n_voxels, n_voxels)
         summary_statistic = None
@@ -204,8 +224,10 @@ def isfc(data, pairwise=False, summary_statistic=None):
         # Compute leave-one-out ISFCs
         isfcs = [np.corrcoef(np.ascontiguousarray(subject.T),
                              np.ascontiguousarray(np.mean(
-                                            np.delete(data, s, axis=0),
-                                            axis=0).T))[:n_voxels, n_voxels:]
+                                         np.delete(data, s, axis=0),
+                                         axis=0).T))[:n_voxels,
+                                                     n_voxels:]
+
                  for s, subject in enumerate(data)]
 
         # Transpose and average ISFC matrices for both directions
@@ -348,11 +370,12 @@ def compute_summary_statistic(iscs, summary_statistic='mean', axis=None):
     case of the mean, ISC values are first Fisher Z transformed (arctanh),
     averaged, then inverse Fisher Z transformed (tanh).
 
-    The implementation is based on the following publication:
+    The implementation is based on the work in [SilverDunlap1987]_.
 
     .. [SilverDunlap1987] "Averaging corrlelation coefficients: should
-      Fisher's z transformation be used?", N. C. Silver, W. P. Dunlap, 1987,
-      Journal of Applied Psychology, 72, 146-148.
+       Fisher's z transformation be used?", N. C. Silver, W. P. Dunlap, 1987,
+       Journal of Applied Psychology, 72, 146-148.
+       https://doi.org/10.1037/0021-9010.72.1.146
 
     Parameters
     ----------
@@ -385,78 +408,6 @@ def compute_summary_statistic(iscs, summary_statistic='mean', axis=None):
     return statistic
 
 
-def compute_p_from_null_distribution(observed, distribution,
-                                     side='two-sided', exact=False,
-                                     axis=None):
-
-    """Compute p-value from null distribution
-
-    Returns the p-value for an observed test statistic given a null
-    distribution. Performs either a 'two-sided' (i.e., two-tailed)
-    test (default) or a one-sided (i.e., one-tailed) test for either the
-    'left' or 'right' side. For an exact test (exact=True), does not adjust
-    for the observed test statistic; otherwise, adjusts for observed
-    test statistic (prevents p-values of zero). If a multidimensional
-    distribution is provided, use axis argument to specify which axis indexes
-    resampling iterations.
-
-    The implementation is based on the following publication:
-
-    .. [PhipsonSmyth2010] "Permutation p-values should never be zero:
-      calculating exact p-values when permutations are randomly drawn.",
-      B. Phipson, G. K., Smyth, 2010, Statistical Applications in Genetics
-      and Molecular Biology, 9, 1544-6115.
-
-    Parameters
-    ----------
-    observed : float
-        Observed test statistic
-
-    distribution : ndarray
-        Null distribution of test statistic
-
-    side : str, default:'two-sided'
-        Perform one-sided ('left' or 'right') or 'two-sided' test
-
-    axis: None or int, default:None
-        Axis indicating resampling iterations in input distribution
-
-    Returns
-    -------
-    p : float
-        p-value for observed test statistic based on null distribution
-    """
-
-    if side not in ('two-sided', 'left', 'right'):
-        raise ValueError("The value for 'side' must be either "
-                         "'two-sided', 'left', or 'right', got {0}".
-                         format(side))
-
-    n_samples = len(distribution)
-    logger.info("Assuming {0} resampling iterations".format(n_samples))
-
-    if side == 'two-sided':
-        # numerator for two-sided test
-        numerator = np.sum(np.abs(distribution) >= np.abs(observed), axis=axis)
-    elif side == 'left':
-        # numerator for one-sided test in left tail
-        numerator = np.sum(distribution <= observed, axis=axis)
-    elif side == 'right':
-        # numerator for one-sided test in right tail
-        numerator = np.sum(distribution >= observed, axis=axis)
-
-    # If exact test all possible permutations and do not adjust
-    if exact:
-        p = numerator / n_samples
-
-    # If not exact test, adjust number of samples to account for
-    # observed statistic; prevents p-value from being zero
-    else:
-        p = (numerator + 1) / (n_samples + 1)
-
-    return p
-
-
 def bootstrap_isc(iscs, pairwise=False, summary_statistic='median',
                   n_bootstraps=1000, ci_percentile=95, random_state=None):
 
@@ -479,15 +430,12 @@ def bootstrap_isc(iscs, pairwise=False, summary_statistic='median',
     controlling false positive rates (FPR) for one-sample tests in the pairwise
     approach.
 
-    The implementation is based on the following publications:
-
-    .. [Chen2016] "Untangling the relatedness among correlations, part I:
-      nonparametric approaches to inter-subject correlation analysis at the
-      group level.", G. Chen, Y. W. Shin, P. A. Taylor, D. R. Glen, R. C.
-      Reynolds, R. B. Israel, R. W. Cox, 2016, NeuroImage, 142, 248-259.
+    The implementation is based on the work in [Chen2016]_ and
+    [HallWilson1991]_.
 
     .. [HallWilson1991] "Two guidelines for bootstrap hypothesis testing.",
-      P. Hall, S. R., Wilson, 1991, Biometrics, 757-762.
+       P. Hall, S. R., Wilson, 1991, Biometrics, 757-762.
+       https://doi.org/10.2307/2532163
 
     Parameters
     ----------
@@ -900,12 +848,7 @@ def permutation_isc(iscs, group_assignment=None, pairwise=False,  # noqa: C901
     two-sample tests. This approach may yield inflated FPRs for one-sample
     tests.
 
-    The implementation is based on the following publication:
-
-    .. [Chen2016] "Untangling the relatedness among correlations, part I:
-      nonparametric approaches to inter-subject correlation analysis at the
-      group level.", G. Chen, Y. W. Shin, P. A. Taylor, D. R. Glen, R. C.
-      Reynolds, R. B. Israel, R. W. Cox, 2016, NeuroImage, 142, 248-259.
+    The implementation is based on the work in [Chen2016]_.
 
     Parameters
     ----------
@@ -1083,16 +1026,14 @@ def timeshift_isc(data, pairwise=False, summary_statistic='median',
     Returns the observed ISC and p-values (two-tailed test), as well as
     the null distribution of ISCs computed on randomly time-shifted data.
 
-    This implementation is based on the following publications:
+    The implementation is based on the work in [Kauppi2010]_ and
+    [Kauppi2014]_.
 
     .. [Kauppi2010] "Inter-subject correlation of brain hemodynamic
-      responses during watching a movie: localization in space and
-      frequency.", J. P. Kauppi, I. P. Jääskeläinen, M. Sams, J. Tohka,
-      2010, Frontiers in Neuroinformatics, 4, 5.
-
-    .. [Kauppi2014] "A versatile software package for inter-subject
-      correlation based analyses of fMRI.", J. P. Kauppi, J. Pajula,
-      J. Tohka, 2014, Frontiers in Neuroinformatics, 8, 2.
+       responses during watching a movie: localization in space and
+       frequency.", J. P. Kauppi, I. P. Jääskeläinen, M. Sams, J. Tohka,
+       2010, Frontiers in Neuroinformatics, 4, 5.
+       https://doi.org/10.3389/fninf.2010.00005
 
     Parameters
     ----------
@@ -1220,16 +1161,13 @@ def phaseshift_isc(data, pairwise=False, summary_statistic='median',
     Returns the observed ISC and p-values (two-tailed test), as well as
     the null distribution of ISCs computed on phase-randomized data.
 
-    This implementation is based on the following publications:
+    The implementation is based on the work in [Lerner2011]_ and
+    [Simony2016]_.
 
     .. [Lerner2011] "Topographic mapping of a hierarchy of temporal
-      receptive windows using a narrated story.", Y. Lerner, C. J. Honey,
-      L. J. Silbert, U. Hasson, 2011, Journal of Neuroscience, 31, 2906-2915.
-
-    .. [Simony2016] "Dynamic reconfiguration of the default mode network
-      during narrative comprehension.", E. Simony, C. J. Honey, J. Chen, O.
-      Lositsky, Y. Yeshurun, A. Wiesel, U. Hasson, 2016, Nature Communications,
-      7, 12141.
+       receptive windows using a narrated story.", Y. Lerner, C. J. Honey,
+       L. J. Silbert, U. Hasson, 2011, Journal of Neuroscience, 31, 2906-2915.
+       https://doi.org/10.1523/jneurosci.3684-10.2011
 
     Parameters
     ----------
@@ -1353,3 +1291,184 @@ def phaseshift_isc(data, pairwise=False, summary_statistic='median',
     p = p[np.newaxis, :]
 
     return observed, p, distribution
+
+
+def compute_p_from_null_distribution(observed, distribution,
+                                     side='two-sided', exact=False,
+                                     axis=None):
+
+    """Compute p-value from null distribution
+
+    Returns the p-value for an observed test statistic given a null
+    distribution. Performs either a 'two-sided' (i.e., two-tailed)
+    test (default) or a one-sided (i.e., one-tailed) test for either the
+    'left' or 'right' side. For an exact test (exact=True), does not adjust
+    for the observed test statistic; otherwise, adjusts for observed
+    test statistic (prevents p-values of zero). If a multidimensional
+    distribution is provided, use axis argument to specify which axis indexes
+    resampling iterations.
+
+    The implementation is based on the work in [PhipsonSmyth2010]_.
+
+    .. [PhipsonSmyth2010] "Permutation p-values should never be zero:
+       calculating exact p-values when permutations are randomly drawn.",
+       B. Phipson, G. K., Smyth, 2010, Statistical Applications in Genetics
+       and Molecular Biology, 9, 1544-6115.
+       https://doi.org/10.2202/1544-6115.1585
+
+    Parameters
+    ----------
+    observed : float
+        Observed test statistic
+
+    distribution : ndarray
+        Null distribution of test statistic
+
+    side : str, default:'two-sided'
+        Perform one-sided ('left' or 'right') or 'two-sided' test
+
+    axis: None or int, default:None
+        Axis indicating resampling iterations in input distribution
+
+    Returns
+    -------
+    p : float
+        p-value for observed test statistic based on null distribution
+    """
+
+    if side not in ('two-sided', 'left', 'right'):
+        raise ValueError("The value for 'side' must be either "
+                         "'two-sided', 'left', or 'right', got {0}".
+                         format(side))
+
+    n_samples = len(distribution)
+    logger.info("Assuming {0} resampling iterations".format(n_samples))
+
+    if side == 'two-sided':
+        # numerator for two-sided test
+        numerator = np.sum(np.abs(distribution) >= np.abs(observed), axis=axis)
+    elif side == 'left':
+        # numerator for one-sided test in left tail
+        numerator = np.sum(distribution <= observed, axis=axis)
+    elif side == 'right':
+        # numerator for one-sided test in right tail
+        numerator = np.sum(distribution >= observed, axis=axis)
+
+    # If exact test all possible permutations and do not adjust
+    if exact:
+        p = numerator / n_samples
+
+    # If not exact test, adjust number of samples to account for
+    # observed statistic; prevents p-value from being zero
+    else:
+        p = (numerator + 1) / (n_samples + 1)
+
+    return p
+
+
+def load_images(image_paths: Iterable[Union[str, Path]]
+                ) -> Iterable[SpatialImage]:
+    """Load images from paths.
+
+    For efficiency, returns an iterator, not a sequence, so the results cannot
+    be accessed by indexing.
+
+    For every new iteration through the images, load_images must be called
+    again.
+
+    Parameters
+    ----------
+    image_paths:
+        Paths to images.
+
+    Yields
+    ------
+    SpatialImage
+        Image.
+    """
+    for image_path in image_paths:
+        if isinstance(image_path, Path):
+            string_path = str(image_path)
+        else:
+            string_path = image_path
+        logger.debug(
+            'Starting to read file %s', string_path
+        )
+        yield nib.load(string_path)
+
+
+def load_boolean_mask(path: Union[str, Path],
+                      predicate: Callable[[np.ndarray], np.ndarray] = None
+                      ) -> np.ndarray:
+    """Load boolean nibabel.SpatialImage mask.
+
+    Parameters
+    ----------
+    path
+        Mask path.
+    predicate
+        Callable used to create boolean values, e.g. a threshold function
+        ``lambda x: x > 50``.
+
+    Returns
+    -------
+    np.ndarray
+        Boolean array corresponding to mask.
+    """
+    if not isinstance(path, str):
+        path = str(path)
+    data = nib.load(path).get_data()
+    if predicate is not None:
+        mask = predicate(data)
+    else:
+        mask = data.astype(np.bool)
+    return mask
+
+
+T = TypeVar("T", bound="MaskedMultiSubjectData")
+
+class MaskedMultiSubjectData(np.ndarray):
+    """Array with shape n_TRs, n_voxels, n_subjects."""
+    @classmethod
+    def from_masked_images(cls: Type[T], masked_images: Iterable[np.ndarray],
+                           n_subjects: int) -> T:
+        """Create a new instance of MaskedMultiSubjecData from masked images.
+
+        Parameters
+        ----------
+        masked_images : iterator
+            Images from multiple subjects to stack along 3rd dimension
+        n_subjects : int
+            Number of subjects; must match the number of images
+
+        Returns
+        -------
+        T
+            A new instance of MaskedMultiSubjectData
+
+        Raises
+        ------
+        ValueError
+            Images have different shapes.
+
+            The number of images differs from n_subjects.
+        """
+        images_iterator = iter(masked_images)
+        first_image = next(images_iterator)
+        first_image_shape = first_image.T.shape
+        result = np.empty((first_image_shape[0], first_image_shape[1],
+                           n_subjects))
+        for n_images, image in enumerate(itertools.chain([first_image],
+                                                         images_iterator)):
+            image = image.T
+            if image.shape != first_image_shape:
+                raise ValueError("Image {} has different shape from first "
+                                 "image: {} != {}".format(n_images,
+                                                          image.shape,
+                                                          first_image_shape))
+            result[:, :, n_images] = image
+        n_images += 1
+        if n_images != n_subjects:
+            raise ValueError("n_subjects != number of images: {} != {}"
+                             .format(n_subjects, n_images))
+        return result.view(cls)
