@@ -1472,3 +1472,36 @@ class MaskedMultiSubjectData(np.ndarray):
             raise ValueError("n_subjects != number of images: {} != {}"
                              .format(n_subjects, n_images))
         return result.view(cls)
+
+
+def mask_image(image: SpatialImage, mask: np.ndarray, data_type: type = None
+               ) -> np.ndarray:
+    """Mask image after optionally casting its type.
+
+    Parameters
+    ----------
+    image
+        Image to mask. Can include time as the last dimension.
+    mask
+        Mask to apply. Must have the same shape as the image data.
+    data_type
+        Type to cast image to.
+
+    Returns
+    -------
+    np.ndarray
+        Masked image.
+
+    Raises
+    ------
+    ValueError
+        Image data and masks have different shapes.
+    """
+    image_data = image.get_data()
+    if image_data.shape[:3] != mask.shape:
+        raise ValueError("Image data and mask have different shapes.")
+    if data_type is not None:
+        cast_data = image_data.astype(data_type)
+    else:
+        cast_data = image_data
+    return cast_data[mask]
