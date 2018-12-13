@@ -56,7 +56,7 @@ import itertools as it
 import nibabel as nib
 from nibabel.spatialimages import SpatialImage
 from pathlib import Path
-from typing import Callable, Iterable, List, Type, TypeVar, Union
+from typing import Callable, Iterable, List, Sequence, Type, TypeVar, Union
 import itertools
 
 logger = logging.getLogger(__name__)
@@ -1505,3 +1505,48 @@ def mask_image(image: SpatialImage, mask: np.ndarray, data_type: type = None
     else:
         cast_data = image_data
     return cast_data[mask]
+
+
+def multimask_images(images: Iterable[SpatialImage],
+                     masks: Sequence[np.ndarray], image_type: type = None
+                     ) -> Iterable[Sequence[np.ndarray]]:
+    """Mask images with multiple masks.
+
+    Parameters
+    ----------
+    images:
+        Images to mask.
+    masks:
+        Masks to apply.
+    image_type:
+        Type to cast images to.
+
+    Yields
+    ------
+    Sequence[np.ndarray]
+        For each mask, a masked image.
+    """
+    for image in images:
+        yield [mask_image(image, mask, image_type) for mask in masks]
+
+
+def mask_images(images: Iterable[SpatialImage], mask: np.ndarray,
+                image_type: type = None) -> Iterable[np.ndarray]:
+    """Mask images.
+
+    Parameters
+    ----------
+    images:
+        Images to mask.
+    mask:
+        Mask to apply.
+    image_type:
+        Type to cast images to.
+
+    Yields
+    ------
+    np.ndarray
+        Masked image.
+    """
+    for images in multimask_images(images, (mask,), image_type):
+        yield images[0]
