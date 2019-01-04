@@ -8,4 +8,4 @@ This notebook is geared toward early-career cognitive neuroscientists (e.g., gra
 * Correcting for multiple tests
 * Loading and visualizing fMRI data
 
-![Alt text](./figure_3.png?raw=true?s=10 "ISC and ISFC analysis schematic")
+![Alt text](./figure_3.png?raw=true&s=200 "ISC and ISFC analysis schematic")
