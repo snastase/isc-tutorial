@@ -1,5 +1,5 @@
 # Intersubject correlation tutorial
-This repo accompanies the manuscript "Measuring shared responses across subjects using intersubject correlation" by Nastase, Gazzola, Hasson, and Keysers (in preparation). Here, you'll find a Jupyter Notebook tutorial introducing basic intersubject correlation (ISC) analyses and statistical tests as implemented in Python using the Brain Imaging Analysis Kit ([BrainIAK](http://brainiak.org/)). The notebook uses both simulated data and a publicly available fMRI dataset. Using Google Colaboratory, you can run the analyses in the tutorial notebook entirely in the cloud. To navigate directly to the notebook on Google Colab, [click here](https://colab.research.google.com/github/snastase/isc-tutorial/blob/master/isc_tutorial.ipynb).
+This repo accompanies the manuscript "Measuring shared responses across subjects using intersubject correlation" by Nastase, Gazzola, Hasson, and Keysers (in preparation). Here, you'll find a Jupyter Notebook tutorial introducing basic intersubject correlation (ISC) analyses and statistical tests as implemented in Python using the Brain Imaging Analysis Kit ([BrainIAK](http://brainiak.org/)). The notebook uses both simulated data and a publicly available fMRI dataset. Using Google Colaboratory, you can run the analyses in the tutorial notebook entirely in the cloud. To navigate directly to the notebook on Google Colab, click here: **[Tutorial on Google Colab]**(https://colab.research.google.com/github/snastase/isc-tutorial/blob/master/isc_tutorial.ipynb).
 
 This notebook is geared toward early-career cognitive neuroscientists (e.g., graduate students) new to ISC analysis and assumes some basic familiarity with Python. The tutorial provides an introductory treatment of the following topics:
 * Computing ISCs
@@ -13,7 +13,7 @@ ISC analyses measure stimulus-evoked responses that are shared across individual
 
 ![Alt text](./figure_3.png?raw=true&s=100 "ISC and ISFC analysis schematic")
 
-#### *References*
+#### References
 * Hasson, U., Ghazanfar, A. A., Galantucci, B., Garrod, S., & Keysers, C. (2012). Brain-to-brain coupling: a mechanism for creating and sharing a social world. *Trends in Cognitive Sciences*, *16*(2), 114–121. https://doi.org/10.1016/j.tics.2011.12.007
 
 * Hasson, U., Malach, R., & Heeger, D. J. (2010). Reliability of cortical activity during natural stimulation. *Trends in Cognitive Sciences*, *14*(1), 40–48. https://doi.org/10.1016/j.tics.2009.10.011
