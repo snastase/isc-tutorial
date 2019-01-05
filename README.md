@@ -13,7 +13,7 @@ ISC analyses measure stimulus-evoked responses that are shared across individual
 
 ![Alt text](./figure_3.png?raw=true&s=100 "ISC and ISFC analysis schematic")
 
-*References*
+#### *References*
 * Hasson, U., Ghazanfar, A. A., Galantucci, B., Garrod, S., & Keysers, C. (2012). Brain-to-brain coupling: a mechanism for creating and sharing a social world. *Trends in Cognitive Sciences*, *16*(2), 114–121. https://doi.org/10.1016/j.tics.2011.12.007
 
 * Hasson, U., Malach, R., & Heeger, D. J. (2010). Reliability of cortical activity during natural stimulation. *Trends in Cognitive Sciences*, *14*(1), 40–48. https://doi.org/10.1016/j.tics.2009.10.011
