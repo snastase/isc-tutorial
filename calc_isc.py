@@ -1,218 +1,224 @@
+#!/usr/bin/env python3
+
+import argparse
+import logging
+from glob import glob
 import numpy as np
-import matplotlib.pyplot as plt
-import configparser, os, re
-from scipy.stats import zscore,pearsonr
 import nibabel as nib
-import time
-#%%
-# Create simple simulated data with high intersubject correlation
-def simulated_timeseries(n_subjects, n_TRs, n_voxels=1, noise=1):
-    signal = np.random.randn(n_TRs, n_voxels // 100)
-    data = [zscore(np.repeat(signal, 100, axis=1) +
-                 np.random.randn(n_TRs, n_voxels) * noise,
-                 axis=0)
-          for subject in np.arange(n_subjects)]
-    
-    return data
+from scipy.stats import pearsonr, zscore
 
-def plot_isc(c,participant,foutroot):
-    """Given a 2D matrix c creates a 2D colormap from -1 to 1"""
 
-    plt.figure(figsize = (5,4))
-    plt.imshow(c, vmin = -1, vmax = 1, cmap = 'PRGn')
-    plt.xlabel('# Voxels')
-    plt.ylabel('# Voxels')
-    plt.colorbar()
-    plt.title('Leave-one-out ISC // Participant {}'.format(participant))
-    fout = foutroot + 'c_{}.{}'.format(participant,fig_fmt)        
-    plt.savefig(fout,dpi = 300,fmt=fig_fmt)
-    plt.close('all')
-    
-    return
+# Set up logger first
+logger = logging.getLogger(__name__)
 
-def fill_n(string,n):
-    
-    try:
-        beg, temp = string.split('{')
-        to_rep, final = temp.split('}')
-        num_digits = len(to_rep)
 
-        result = beg + '{num:0{ndigits}}'.format(num=n,ndigits=num_digits) + final
-        
-    except:
-        result = string
-        
-    return result
+# Set up argument parser
+parser = argparse.ArgumentParser(
+    description=("Python-based command-line program for computing "
+                 "leave-one-out intersubject correlations (ISCs)"),
+    epilog=(
+    """
+    This program requires and installation of Python 3 with NumPy/
+    SciPy and NiBabel
+    This implementation is based on the BrainIAK (https://brainiak.org)
+    implementation, but does not require a BrainIAK installation.
+    Reference
+    """))
+optional = parser._action_groups.pop()
+required = parser.add_argument_group('required_arguments')
+required.add_argument("-i", "--inputs", nargs='+', required=True,
+                      help=("NIfTI input files on which to compute ISCs"))
+required.add_argument("-o", "--output", type=str, required=True,
+                      help=("NIfTI output filename for ISC values"))
+optional.add_argument("-m", "--mask", type=str,
+                    help=("NIfTI mask file for masking input data"))
+optional.add_argument("-z", "--zscore", action='store_true',
+                    dest='zscore_data',
+                    help=("Z-score time series for each voxel in input"))
+optional.add_argument("-s", "--summarize", type=str,
+                    choices=['mean', 'median'],
+                    help=("summarize results across participants "
+                          "using either 'mean' or 'median'"))
+optional.add_argument("-v", "--verbosity", type=int, choices=[1, 2, 3, 4, 5],
+                    default=3, help=("increase output verbosity via "
+                                     "Python's logging module"))
+parser._action_groups.append(optional)
+args = parser.parse_args()
 
-def make_file_list(subjects):
-    
-    file_list = []
-    n_true = 0
-    
-    for n in subjects:
-    
-        fin = froot + fill_n(fld_example,n) + fill_n(input_fname,n)
-        
-        if os.path.isfile(fin):
-            file_list.append(fin)
-            n_true += 1
+
+# Function to load NIfTI mask and convert to boolean
+def load_mask(mask_arg):
+
+    # Load mask from file
+    mask = nib.load(mask_arg).get_fdata().astype(bool)
+
+    # Get indices of voxels in mask
+    mask_indices = np.where(mask)
+
+    return mask, mask_indices
+
+
+# Function for loading (and organizing) data from NIfTI files
+def load_data(inputs_arg, mask=None):
+
+    # Convert input argument string to filenames
+    input_fns = [fn for fns in [glob(fn) for fn in inputs_arg]
+                     for fn in fns]
+    data = []
+    affine, data_shape = None, None
+    for input_fn in input_fns:
+
+        # Load in the NIfTI image using NiBabel and check shapes
+        input_img = nib.load(input_fn)
+        if not data_shape:
+            data_shape = input_img.shape
+            shape_fn = input_fn
+        if input_img.ndim != 4:
+            raise ValueError("input files should be 4-dimensional "
+                             "(three spatial dimensions plus time)")
+        if input_img.shape != data_shape:
+            raise ValueError("input files have mismatching shape: "
+                             "file '{0}' with shape {1} does not "
+                             "match file '{2}' with shape "
+                             "{3}".format(input_fn,
+                                          input_img.shape,
+                                          shape_fn,
+                                          data_shape))
+        logger.debug("input file '{0}' NIfTI image is "
+                     "shape {1}".format(input_fn, data_shape))
+
+        # Save the affine and header from the first image
+        if affine is None:
+            affine, header = input_img.affine, input_img.header
+            logger.debug("using affine and header from "
+                         "file '{0}'".format(input_fn))
+
+        # Get data from image and apply mask (if provided)
+        input_data = input_img.get_fdata()
+        if isinstance(mask, np.ndarray):
+            input_data = input_data[mask]
         else:
-            print('Warning!!! No file found in %s' % fin)
-            
-    print('Ready to load data for {} participants'.format(n_true))
-    
-    return file_list
+            input_data = input_data.reshape((
+                np.product(input_data.shape[:3]),
+                input_data.shape[3]))
+        data.append(input_data.T)
+        logger.info("finished loading data from "
+                    "'{0}'".format(input_fn))
+
+    # Stack input data
+    data = np.stack(data, axis=2)
+
+    return data, affine, header
 
 
-def import_input_file(fin,sub_sample = False):
-    
-    input_ext = fin.split('.')[-1]
-    
-    if input_ext == 'mat':
-        
-        print('Please input ,nii files.')
-        
-    elif input_ext == 'nii':
-        
-        img = nib.load(fin)            
-        data = img.get_fdata()
-        hdr = img.header     
-        aff = img.affine
-        
-        nx,ny,nz, n_TRs = data.shape
-        n_voxels = np.prod([nx,ny,nz])
-        
-        # data = data.reshape((n_voxels,n_TRs)).T # TODO double check that this transpose doesn't hurt
-        
-        # If you want to play with less data
-        if sub_sample == True:
-            
-            n_sampled_voxels = 100
-            r_indices = np.arange(n_sampled_voxels)
-#                r_indices = np.random.permutation(n_voxels)[:n_sampled_voxels]
-            v_indices = np.sort(r_indices)
-        
-            data = data[:,v_indices]
-    
-    return hdr,aff,data
+# Function to compute leave-one-out ISCs on input data
+def compute_isc(data):
 
-def compute_participant_average(subjects):
+    # Get shape of data
+    n_TRs, n_voxels, n_subjects = data.shape
 
-    file_list = make_file_list(subjects)
-    n_files = len(file_list)
+    # Check if only two subjects
+    if n_subjects == 2:
+        logger.warning("only two subjects provided! simply "
+                       "computing ISC between them")
 
-    for k,fin in enumerate(file_list):
+    # Loop over each voxel or ROI
+    voxel_iscs = []
+    for v in np.arange(data.shape[1]):
+        voxel_data = data[:, v, :].T
 
-        # If it's the first I need to initialize the average
-        if k == 0:
-            hdr,aff,average = import_input_file(fin)
+        # Compute Pearson correlations between voxel time series
+        if n_subjects == 2:
+            iscs = pearsonr(voxel_data[0, :], voxel_data[1, :])[0]
         else:
-            average += import_input_file(fin)[-1]
-            
-        print('Averaging... %d out of %d' % (k +1, n_files))
+            iscs = np.array([pearsonr(subject,
+                                      np.nanmean(np.delete(
+                                                  voxel_data,
+                                                  s, axis=0),
+                                                 axis=0))[0]
+                             for s, subject in enumerate(voxel_data)])
+        voxel_iscs.append(iscs)
+    iscs = np.column_stack(voxel_iscs)
 
-    average = average / float(n_files)
-
-    fout = foutroot + 'subjects_average.nii'
-    img = nib.Nifti1Image(average, aff, header = hdr)
-    img.to_filename(fout)
-
-    
-    return average
+    return iscs
 
 
-def leave_one_out_isc(subjects):
-    
+# Function to optionally summarize ISCs
+def summarize_iscs(iscs, summary_statistic):
 
-    n_subjects = len(subjects)
-    file_list = make_file_list(subjects)
+    # Compute mean (with Fisher Z transformation)
+    if summary_statistic == 'mean':
+        statistic = np.tanh(np.nanmean(np.arctanh(iscs), axis=0))
+        logger.info("computing mean of ISCs (with "
+                    "Fisher Z transformation)")
 
-    # loop trough every subject
-    for s,fin in zip(subjects,file_list): 
+    # Compute median
+    elif summary_statistic == 'median':
+        statistic = np.nanmedian(iscs, axis=0)
+        logger.info("computing median of ISCs")
 
-        print('Computing ISC for participant %d / %d' % (s, n_subjects))
-
-        hdr,aff,data = import_input_file(fin)
-       
-        # Prepare one array for output
-        corr_data = np.zeros((nx,ny,nz),dtype = float)
-                
-        # Calculate the  correlation for every voxel
-        for vx in range(nx):
-            for vy in range(ny):
-                for vz in range(nz):
-                    # if there is some variation in the data
-                    if np.diff(data[vx,vy,vz,:]).any() != 0:
-                        # Compute the correlation coefficient
-                        corr_data[vx,vy,vz] = pearsonr(data_average[vx,vy,vz,:] - ( data[vx,vy,vz,:] / (1.0 * n_subjects) ),
-                                                         data[vx,vy,vz,:])[0]
-                    else: # Otherwise set it to zero
-                        corr_data[vx,vy,vz] = 0
-                    
-    
-        # after correlating we can free the memory from the data
-        del data
-        
-        # And save it as a nifti file
-        fout = foutroot + 'leaveoneout_c_S{:02}.nii'.format(s)
-        img = nib.Nifti1Image(corr_data, aff, header = hdr)
-        nib.save(img,fout)
-        
-        # Save also the Fisher z-transformation
-        fout = foutroot + 'leaveoneout_z_S{:02}.nii'.format(s)
-        img = nib.Nifti1Image(np.arctanh(corr_data), aff, header = hdr)
-        img.to_filename(fout)
+    return statistic
 
 
+# Function to transform data back into NIfTI image and save
+def save_data(iscs, affine, header, output_fn, mask_indices=None):
 
-    return
+    # Output ISCs image shape
+    i, j, k = header.get_data_shape()[:3]
+    output_shape = (i, j, k, iscs.shape[0])
 
-    
-#%%
-########## MAIN CODE ##########
+    # Reshape masked data
+    if mask_indices:
+        output_iscs = np.zeros(output_shape)
+        output_iscs[mask_indices] = iscs.T
+    else:
+        output_iscs = iscs.T.reshape(output_shape)
+
+    # Construct output NIfTI image
+    output_img = nib.Nifti1Image(output_iscs, affine)
+
+    # Save the NIfTI image according to output filename
+    nib.save(output_img, output_fn)
+
+
+# Function to execute the above code
+def main(args):
+
+    # Set up logger according to verbosity level
+    logging.basicConfig(level=abs(6 - args.verbosity) * 10)
+    logger.info("verbosity set to Python logging level '{0}'".format(
+        logging.getLevelName(logger.getEffectiveLevel())))
+
+    # Get optional mask
+    if args.mask:
+        mask, mask_indices = load_mask(args.mask)
+    else:
+        mask, mask_indices = None
+        logger.warning("no mask provided! are you sure you want "
+                        "to compute ISCs for all voxels in image?")
+
+    # Load data
+    data, affine, header = load_data(args.inputs, mask=mask)
+
+    # Optionally z-score data
+    if args.zscore_data:
+        data = zscore(data)
+        logging.info("z-scored input data prior to computing ISCs")
+
+    # Compute ISCs
+    iscs = compute_isc(data)
+
+    # Optionally apply summary statistic
+    if args.summarize and iscs.shape[0] > 1:
+        iscs = summarize_iscs(iscs,
+                              summary_statistic=args.summarize)
+
+    # Save output ISCs to file
+    save_data(iscs, affine, header, args.output,
+              mask_indices=mask_indices)
+
+
+# Name guard so we can load these functions elsewhere
+# without actually trying to run everything
 if __name__ == '__main__':
-    
-
-
-    ### IMPORT INPUT DATA ###
-    config = configparser.ConfigParser()
-    config.read('settings.ini')
-    froot = config['INPUT']['Folder with input data']
-    N_subjects = int(config['INPUT']['N participants'])
-    fld_example = config['INPUT']['Folder hierarchy']
-    input_fname = config['INPUT']['File name']
-    input_ext = input_fname.split('.')[-1]
- 
-    # Prepare parameters for output
-    subjects = np.arange(N_subjects) + 1
-
-    foutroot = froot + 'ISC_%02d-%02d/' % (subjects[0],subjects[-1])
-    if not os.path.exists(foutroot):
-        os.makedirs(foutroot)
-        
-        
-    # Load the average among participants or compute it
-    start = time.time()
-    
-    try:
-        img = nib.load(foutroot + 'subjects_average.nii')
-        print('Loading data average from %ssubjects_average.nii' % foutroot)
-        data_average = img.get_fdata()
-    except:
-        print('No file with average data found. Computing the average now.')
-        data_average = compute_participant_average(subjects)
-        
-    nx,ny,nz, n_TRs = data_average.shape
-    
-    avg_done = time.time()
-    T_avg = avg_done - start
-    print('Average computed in %d min and %d s' % (int(T_avg/60),int(np.mod(T_avg,60))))
-    
-    # Compute the leave one out isc
-    leave_one_out_isc(subjects)
-    
-    isc_done = time.time()
-    T_isc = isc_done - avg_done
-    print('ISC computed in %d min and %d s' % (int(T_isc/60),int(np.mod(T_isc,60))))
-    
-    # byeee
+    main(args)
