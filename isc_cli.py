@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import argparse
 import logging
 from glob import glob
@@ -13,74 +14,78 @@ logger = logging.getLogger(__name__)
 
 
 # Set up argument parser
-parser = argparse.ArgumentParser(
-    description=("Python-based command-line program for computing "
-                 "leave-one-out intersubject correlations (ISCs)"),
-    epilog=("""
-This program provides a simple Python-based command-line interface (CLI) for
-running intersubject correlation (ISC) analysis. ISCs are computed using the
-leave-one-out approach where each subject's time series (per voxel) is
-correlated with the average of the remaining subjects' time series. The
---input should be two or more 4-dimensional NIfTI (.nii or .nii.gz) files, one
-for each subject. Alternatively, a wildcard can be used to indicate multiple
-files (e.g., *.nii.gz). The --output should be a single filename indicating
-where the results of the ISC analysis should be saved. If N subjects are input
-into the ISC analysis, the resulting output file will have N samples (one ISC
-value for each left-out subject). Typically a 3-dimensional NIfTI file should
-be supplied to the --mask argument so as to restrict the analysis to voxels of
-interest (e.g., the brain, gray matter). The mask file will be converted to a
-Boolean array and should have 1s for voxels of interest and 0s elsewhere. All
-input files (and the mask) must be spatially normalized to standard space
-(e.g., MNI space) prior to ISC analysis. The --zscore argument indicates that
-response time series should be z-scored (per voxel) prior to ISC analysis;
-this may be important when computing the average time series for N–1 subjects.
-The --summarize option can be used to computer either the mean or median ISC
-value across left-out subjects after completing the ISC analysis (in which case
-the output file will only have one sample). If the mean ISC values are requested,
-ISC values are Fisher Z-transformed, the mean is computed, and then the mean
-is inverse Fisher Z-transformed. This program requires an installation of
-Python 3 with the NumPy/SciPy and NiBabel modules. The implementation is
-based on the BrainIAK (https://brainiak.org) implementation, but does not
-require a BrainIAK installation. Note that this software is not written for
-speed or memory-efficiency, but for readability/transparency.
+def parse_arguments(args):
+    
+    parser = argparse.ArgumentParser(
+        description=("Python-based command-line program for computing "
+                     "leave-one-out intersubject correlations (ISCs)"),
+        epilog=("""
+    This program provides a simple Python-based command-line interface (CLI) for
+    running intersubject correlation (ISC) analysis. ISCs are computed using the
+    leave-one-out approach where each subject's time series (per voxel) is
+    correlated with the average of the remaining subjects' time series. The
+    --input should be two or more 4-dimensional NIfTI (.nii or .nii.gz) files, one
+    for each subject. Alternatively, a wildcard can be used to indicate multiple
+    files (e.g., *.nii.gz). The --output should be a single filename indicating
+    where the results of the ISC analysis should be saved. If N subjects are input
+    into the ISC analysis, the resulting output file will have N samples (one ISC
+    value for each left-out subject). Typically a 3-dimensional NIfTI file should
+    be supplied to the --mask argument so as to restrict the analysis to voxels of
+    interest (e.g., the brain, gray matter). The mask file will be converted to a
+    Boolean array and should have 1s for voxels of interest and 0s elsewhere. All
+    input files (and the mask) must be spatially normalized to standard space
+    (e.g., MNI space) prior to ISC analysis. The --zscore argument indicates that
+    response time series should be z-scored (per voxel) prior to ISC analysis;
+    this may be important when computing the average time series for N–1 subjects.
+    The --summarize option can be used to computer either the mean or median ISC
+    value across left-out subjects after completing the ISC analysis (in which case
+    the output file will only have one sample). If mean ISC values are requested,
+    ISC values are Fisher Z-transformed, the mean is computed, and then the mean
+    is inverse Fisher Z-transformed. This program requires an installation of
+    Python 3 with the NumPy/SciPy and NiBabel modules. The implementation is
+    based on the BrainIAK (https://brainiak.org) implementation, but does not
+    require a BrainIAK installation. Note that this software is not written for
+    speed or memory-efficiency, but for readability/transparency.
 
-Example usage:
-    isc_cli.py --input s1.nii.gz s2.nii.gz s3.nii.gz \\
-    --output isc.nii.gz --mask mask.nii.gz --zscore
+    Example usage:
+        isc_cli.py --input s1.nii.gz s2.nii.gz s3.nii.gz \\
+        --output isc.nii.gz --mask mask.nii.gz --zscore
 
-    isc_cli.py --input s*.nii.gz --output isc.nii.gz \\
-    --mask mask.nii.gz --zscore
+        isc_cli.py --input s*.nii.gz --output isc.nii.gz \\
+        --mask mask.nii.gz --zscore
 
-    isc_cli.py --input s*.nii.gz --output mean_isc.nii.gz \\
-    --mask mask.nii.gz --zscore --summarize mean
+        isc_cli.py --input s*.nii.gz --output mean_isc.nii.gz \\
+        --mask mask.nii.gz --zscore --summarize mean
 
-References:
-Nastase, S. A., Gazzola, V., Hasson, U., Keysers, C. (in preparation).
-Measuring shared responses across subjects using intersubject correlation.
+    References:
+    Nastase, S. A., Gazzola, V., Hasson, U., Keysers, C. (in preparation).
+    Measuring shared responses across subjects using intersubject correlation.
 
-Author: Samuel A. Nastase, 2019
-    """), formatter_class=argparse.RawDescriptionHelpFormatter)
-optional = parser._action_groups.pop()
-required = parser.add_argument_group('required_arguments')
-required.add_argument("-i", "--inputs", nargs='+', required=True,
-                      help=("NIfTI input files on which to compute ISCs"))
-required.add_argument("-o", "--output", type=str, required=True,
-                      help=("NIfTI output filename for ISC values"))
-optional.add_argument("-m", "--mask", type=str,
-                    help=("NIfTI mask file for masking input data"))
-optional.add_argument("-z", "--zscore", action='store_true',
-                    dest='zscore_data',
-                    help=("Z-score time series for each voxel in input"))
-optional.add_argument("-s", "--summarize", type=str,
-                    choices=['mean', 'median'],
-                    help=("summarize results across participants "
-                          "using either 'mean' or 'median'"))
-optional.add_argument("-v", "--verbosity", type=int, choices=[1, 2, 3, 4, 5],
-                    default=3, help=("increase output verbosity via "
-                                     "Python's logging module"))
-parser.add_argument('--version', action='version', version='isc_cli.py 1.0.0')
-parser._action_groups.append(optional)
-args = parser.parse_args()
+    Author: Samuel A. Nastase, 2019
+        """), formatter_class=argparse.RawDescriptionHelpFormatter)
+    optional = parser._action_groups.pop()
+    required = parser.add_argument_group('required_arguments')
+    required.add_argument("-i", "--inputs", nargs='+', required=True,
+                          help=("NIfTI input files on which to compute ISCs"))
+    required.add_argument("-o", "--output", type=str, required=True,
+                          help=("NIfTI output filename for ISC values"))
+    optional.add_argument("-m", "--mask", type=str,
+                        help=("NIfTI mask file for masking input data"))
+    optional.add_argument("-z", "--zscore", action='store_true',
+                        dest='zscore_data',
+                        help=("Z-score time series for each voxel in input"))
+    optional.add_argument("-s", "--summarize", type=str,
+                        choices=['mean', 'median'],
+                        help=("summarize results across participants "
+                              "using either 'mean' or 'median'"))
+    optional.add_argument("-v", "--verbosity", type=int, choices=[1, 2, 3, 4, 5],
+                        default=3, help=("increase output verbosity via "
+                                         "Python's logging module"))
+    parser.add_argument('--version', action='version', version='isc_cli.py 1.0.0')
+    parser._action_groups.append(optional)
+    args = parser.parse_args(args)
+    
+    return args
 
 
 # Function to load NIfTI mask and convert to boolean
@@ -149,7 +154,7 @@ def load_data(inputs_arg, mask=None):
 
 
 # Function to compute leave-one-out ISCs on input data
-def compute_isc(data):
+def compute_iscs(data):
 
     # Get shape of data
     n_TRs, n_voxels, n_subjects = data.shape
@@ -185,13 +190,14 @@ def summarize_iscs(iscs, summary_statistic):
 
     # Compute mean (with Fisher Z transformation)
     if summary_statistic == 'mean':
-        statistic = np.tanh(np.nanmean(np.arctanh(iscs), axis=0))
+        statistic = np.tanh(np.nanmean(np.arctanh(iscs),
+                                       axis=0))[np.newaxis, :]
         logger.info("computing mean of ISCs (with "
                     "Fisher Z transformation)")
 
     # Compute median
     elif summary_statistic == 'median':
-        statistic = np.nanmedian(iscs, axis=0)
+        statistic = np.nanmedian(iscs, axis=0)[np.newaxis, :]
         logger.info("computing median of ISCs")
 
     return statistic
@@ -221,6 +227,9 @@ def save_data(iscs, affine, header, output_fn, mask_indices=None):
 # Function to execute the above code
 def main(args):
 
+    # Get arguments
+    args = parse_arguments(args)
+
     # Set up logger according to verbosity level
     logging.basicConfig(level=abs(6 - args.verbosity) * 10)
     logger.info("verbosity set to Python logging level '{0}'".format(
@@ -243,7 +252,7 @@ def main(args):
         logging.info("z-scored input data prior to computing ISCs")
 
     # Compute ISCs
-    iscs = compute_isc(data)
+    iscs = compute_iscs(data)
 
     # Optionally apply summary statistic
     if args.summarize and iscs.shape[0] > 1:
@@ -258,4 +267,4 @@ def main(args):
 # Name guard so we can load these functions elsewhere
 # without actually trying to run everything
 if __name__ == '__main__':
-    main(args)
+    main(sys.argv[1:])
