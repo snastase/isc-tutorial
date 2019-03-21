@@ -16,14 +16,50 @@ logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser(
     description=("Python-based command-line program for computing "
                  "leave-one-out intersubject correlations (ISCs)"),
-    epilog=(
-    """
-    This program requires and installation of Python 3 with NumPy/
-    SciPy and NiBabel
-    This implementation is based on the BrainIAK (https://brainiak.org)
-    implementation, but does not require a BrainIAK installation.
-    Reference
-    """))
+    epilog=("""
+This program provides a simple Python-based command-line interface (CLI) for
+running intersubject correlation (ISC) analysis. ISCs are computed using the
+leave-one-out approach where each subject's time series (per voxel) is
+correlated with the average of the remaining subjects' time series. The
+--input should be two or more 4-dimensional NIfTI (.nii or .nii.gz) files, one
+for each subject. Alternatively, a wildcard can be used to indicate multiple
+files (e.g., *.nii.gz). The --output should be a single filename indicating
+where the results of the ISC analysis should be saved. If N subjects are input
+into the ISC analysis, the resulting output file will have N samples (one ISC
+value for each left-out subject). Typically a 3-dimensional NIfTI file should
+be supplied to the --mask argument so as to restrict the analysis to voxels of
+interest (e.g., the brain, gray matter). The mask file will be converted to a
+Boolean array and should have 1s for voxels of interest and 0s elsewhere. All
+input files (and the mask) must be spatially normalized to standard space
+(e.g., MNI space) prior to ISC analysis. The --zscore argument indicates that
+response time series should be z-scored (per voxel) prior to ISC analysis;
+this may be important when computing the average time series for N–1 subjects.
+The --summarize option can be used to computer either the mean or median ISC
+value across left-out subjects after completing the ISC analysis (in which case
+the output file will only have one sample). If the mean ISC values are requested,
+ISC values are Fisher Z-transformed, the mean is computed, and then the mean
+is inverse Fisher Z-transformed. This program requires an installation of
+Python 3 with the NumPy/SciPy and NiBabel modules. The implementation is
+based on the BrainIAK (https://brainiak.org) implementation, but does not
+require a BrainIAK installation. Note that this software is not written for
+speed or memory-efficiency, but for readability/transparency.
+
+Example usage:
+    isc_cli.py --input s1.nii.gz s2.nii.gz s3.nii.gz \\
+    --output isc.nii.gz --mask mask.nii.gz --zscore
+
+    isc_cli.py --input s*.nii.gz --output isc.nii.gz \\
+    --mask mask.nii.gz --zscore
+
+    isc_cli.py --input s*.nii.gz --output mean_isc.nii.gz \\
+    --mask mask.nii.gz --zscore --summarize mean
+
+References:
+Nastase, S. A., Gazzola, V., Hasson, U., Keysers, C. (in preparation).
+Measuring shared responses across subjects using intersubject correlation.
+
+Author: Samuel A. Nastase, 2019
+    """), formatter_class=argparse.RawDescriptionHelpFormatter)
 optional = parser._action_groups.pop()
 required = parser.add_argument_group('required_arguments')
 required.add_argument("-i", "--inputs", nargs='+', required=True,
@@ -42,6 +78,7 @@ optional.add_argument("-s", "--summarize", type=str,
 optional.add_argument("-v", "--verbosity", type=int, choices=[1, 2, 3, 4, 5],
                     default=3, help=("increase output verbosity via "
                                      "Python's logging module"))
+parser.add_argument('--version', action='version', version='isc_cli.py 1.0.0')
 parser._action_groups.append(optional)
 args = parser.parse_args()
 
