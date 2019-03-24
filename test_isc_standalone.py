@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import pytest
 from isc_standalone import (isc, isfc, bootstrap_isc, permutation_isc,
                             squareform_isfc, timeshift_isc,
                             phaseshift_isc)
@@ -129,10 +130,8 @@ def test_isc_options():
     isc_median = isc(data, pairwise=False, summary_statistic='median')
     assert isc_median.shape == (n_voxels,)
 
-    try:
+    with pytest.raises(ValueError):
         isc(data, pairwise=False, summary_statistic='min')
-    except ValueError:
-        logger.info("Correctly caught unexpected summary statistic")
 
     logger.info("Finished testing ISC options")
 
@@ -669,6 +668,58 @@ def test_isfc_options():
     isfcs, iscs_v = isfc(data, pairwise=True)
     assert np.allclose(iscs, iscs_v, rtol=1e-03)
 
+    # Generate 'targets' data and use for ISFC
+    data = simulated_timeseries(n_subjects, n_TRs,
+                                n_voxels=n_voxels, data_type='array')
+    n_targets = 15
+    targets_data = simulated_timeseries(n_subjects, n_TRs,
+                                        n_voxels=n_targets,
+                                        data_type='array')
+    isfcs = isfc(data, targets=targets_data, pairwise=False,
+                 vectorize_isfcs=False)
+    assert isfcs.shape == (n_subjects, n_voxels, n_targets)
+
+    # Ensure 'square' output enforced
+    isfcs = isfc(data, targets=targets_data, pairwise=False,
+                 vectorize_isfcs=True)
+    assert isfcs.shape == (n_subjects, n_voxels, n_targets)
+
+    # Check list input for targets
+    targets_data = simulated_timeseries(n_subjects, n_TRs,
+                                        n_voxels=n_targets,
+                                        data_type='list')
+    isfcs = isfc(data, targets=targets_data, pairwise=False,
+                 vectorize_isfcs=False)
+    assert isfcs.shape == (n_subjects, n_voxels, n_targets)
+
+    # Check that mismatching subjects / TRs breaks targets
+    targets_data = simulated_timeseries(n_subjects, n_TRs,
+                                        n_voxels=n_targets,
+                                        data_type='array')
+
+    with pytest.raises(ValueError):
+        isfcs = isfc(data, targets=targets_data[..., :-1],
+                     pairwise=False, vectorize_isfcs=False)
+    assert isfcs.shape == (n_subjects, n_voxels, n_targets)
+
+    with pytest.raises(ValueError):
+        isfcs = isfc(data, targets=targets_data[:-1, ...],
+                     pairwise=False, vectorize_isfcs=False)
+
+    # Check targets for only 2 subjects
+    isfcs = isfc(data[..., :2], targets=targets_data[..., :2],
+                 pairwise=False, summary_statistic=None)
+    assert isfcs.shape == (2, n_voxels, n_targets)
+
+    isfcs = isfc(data[..., :2], targets=targets_data[..., :2],
+                 pairwise=True, summary_statistic=None)
+    assert isfcs.shape == (2, n_voxels, n_targets)
+
+    # Check that supplying targets enforces leave-one-out
+    isfcs_pw = isfc(data, targets=targets_data, pairwise=True,
+                    vectorize_isfcs=False, tolerate_nans=False)
+    assert isfcs_pw.shape == (n_subjects, n_voxels, n_targets)
+
     logger.info("Finished testing ISFC options")
 
 
@@ -828,6 +879,28 @@ def test_isfc_nans():
             np.sum(np.isnan(isfcs_pw_T)) ==
             11210)
 
+    # Check for NaN-handling in targets
+    n_targets = 15
+    data = simulated_timeseries(n_subjects, n_TRs,
+                                n_voxels=n_voxels, data_type='array',
+                                random_state=random_state)
+    targets_data = simulated_timeseries(n_subjects, n_TRs,
+                                        n_voxels=n_targets,
+                                        data_type='array')
+
+    # Inject NaNs into targets_data
+    targets_data[0, 0, 0] = np.nan
+
+    # Don't tolerate NaNs, should lose zeroeth voxel
+    isfcs_loo = isfc(data,  targets=targets_data, pairwise=False,
+                     vectorize_isfcs=False, tolerate_nans=False)
+    assert np.sum(np.isnan(isfcs_loo)) == (n_subjects - 1) * (n_targets * 2)
+
+    # Single NaN in targets will get averaged out with tolerate
+    isfcs_loo = isfc(data, targets=targets_data, pairwise=False,
+                     vectorize_isfcs=False, tolerate_nans=True)
+    assert np.sum(np.isnan(isfcs_loo)) == 0
+
 
 def test_squareform_isfc():
 
@@ -868,6 +941,221 @@ def test_squareform_isfc():
     assert np.array_equal(isfcs_r, squareform_isfc(isfcs_c, iscs_c))
 
 
+def test_p_from_null():
+    import numpy as np
+    from brainiak.utils.utils import p_from_null
+
+    # Create random null and observed value in tail
+    null = np.random.randn(10000)
+    observed = np.ceil(np.percentile(null, 97.5) * 1000) / 1000
+
+    # Check that we catch improper side
+    with pytest.raises(ValueError):
+        _ = p_from_null(observed, null, side='wrong')
+
+    # Check two-tailed p-value for observed
+    p_ts = p_from_null(observed, null)
+    assert np.isclose(p_ts, 0.05, atol=1e-02)
+
+    # Check two-tailed p-value for observed
+    p_right = p_from_null(observed, null, side='right')
+    assert np.isclose(p_right, 0.025, atol=1e-02)
+    assert np.isclose(p_right, p_ts / 2, atol=1e-02)
+
+    # Check two-tailed p-value for observed
+    p_left = p_from_null(observed, null, side='left')
+    assert np.isclose(p_left, 0.975, atol=1e-02)
+    assert np.isclose(1 - p_left, p_right, atol=1e-02)
+    assert np.isclose(1 - p_left, p_ts / 2, atol=1e-02)
+
+    # Check 2-dimensional input (i.e., samples by voxels)
+    null = np.random.randn(10000, 3)
+    observed = np.ceil(np.percentile(null, 97.5, axis=0) * 1000) / 1000
+
+    # Check two-tailed p-value for observed
+    p_ts = p_from_null(observed, null, axis=0)
+    assert np.allclose(p_ts, 0.05, atol=1e-02)
+
+    # Check two-tailed p-value for observed
+    p_right = p_from_null(observed, null, side='right', axis=0)
+    assert np.allclose(p_right, 0.025, atol=1e-02)
+    assert np.allclose(p_right, p_ts / 2, atol=1e-02)
+
+    # Check two-tailed p-value for observed
+    p_left = p_from_null(observed, null, side='left', axis=0)
+    assert np.allclose(p_left, 0.975, atol=1e-02)
+    assert np.allclose(1 - p_left, p_right, atol=1e-02)
+    assert np.allclose(1 - p_left, p_ts / 2, atol=1e-02)
+
+    # Check for exact test
+    p_ts = p_from_null(observed, null, exact=True, axis=0)
+    assert np.allclose(p_ts, 0.05, atol=1e-02)
+
+    # Check two-tailed p-value for exact
+    p_right = p_from_null(observed, null, side='right',
+                          exact=True, axis=0)
+    assert np.allclose(p_right, 0.025, atol=1e-02)
+    assert np.allclose(p_right, p_ts / 2, atol=1e-02)
+
+    # Check two-tailed p-value for exact
+    p_left = p_from_null(observed, null, side='left',
+                         exact=True, axis=0)
+    assert np.allclose(p_left, 0.975, atol=1e-02)
+    assert np.allclose(1 - p_left, p_right, atol=1e-02)
+    assert np.allclose(1 - p_left, p_ts / 2, atol=1e-02)
+
+
+def test_phase_randomize():
+    import numpy as np
+    from scipy.fftpack import fft
+    from scipy.stats import pearsonr
+    from brainiak.utils.utils import phase_randomize
+
+    data = np.repeat(np.repeat(np.random.randn(60)[:, np.newaxis, np.newaxis],
+                               30, axis=1),
+                     20, axis=2)
+    assert np.array_equal(data[..., 0], data[..., 1])
+
+    # Phase-randomize data across subjects (same across voxels)
+    shifted_data = phase_randomize(data, voxelwise=False, random_state=1)
+    assert shifted_data.shape == data.shape
+    assert not np.array_equal(shifted_data[..., 0], shifted_data[..., 1])
+    assert not np.array_equal(shifted_data[..., 0], data[..., 0])
+
+    # Check that uneven n_TRs doesn't explode
+    _ = phase_randomize(data[:-1, ...])
+
+    # Check that random_state returns same shifts
+    shifted_data_ = phase_randomize(data, voxelwise=False, random_state=1)
+    assert np.array_equal(shifted_data, shifted_data_)
+
+    shifted_data_ = phase_randomize(data, voxelwise=False, random_state=2)
+    assert not np.array_equal(shifted_data, shifted_data_)
+
+    # Phase-randomize subjects and voxels
+    shifted_data = phase_randomize(data, voxelwise=True, random_state=1)
+    assert shifted_data.shape == data.shape
+    assert not np.array_equal(shifted_data[..., 0], shifted_data[..., 1])
+    assert not np.array_equal(shifted_data[..., 0], data[..., 0])
+    assert not np.array_equal(shifted_data[:, 0, 0], shifted_data[:, 1, 0])
+
+    # Try with 2-dimensional input
+    shifted_data = phase_randomize(data[..., 0],
+                                   voxelwise=True,
+                                   random_state=1)
+    assert shifted_data.ndim == 2
+    assert not np.array_equal(shifted_data[:, 0], shifted_data[:, 1])
+
+    # Create correlated noisy data
+    corr_data = np.repeat(np.random.randn(60)[:, np.newaxis, np.newaxis],
+                          2, axis=2) + np.random.randn(60, 1, 2)
+
+    # Get correlation and frequency domain for data
+    corr_r = pearsonr(corr_data[:, 0, 0],
+                      corr_data[:, 0, 1])[0]
+    corr_freq = fft(corr_data, axis=0)
+
+    # Phase-randomize time series and get correlation/frequency
+    shifted_data = phase_randomize(corr_data)
+    shifted_r = pearsonr(shifted_data[:, 0, 0],
+                         shifted_data[:, 0, 1])[0]
+    shifted_freq = fft(shifted_data, axis=0)
+
+    # Check that phase-randomization reduces correlation
+    assert np.abs(shifted_r) < np.abs(corr_r)
+
+    # Check that amplitude spectrum is preserved
+    assert np.allclose(np.abs(shifted_freq), np.abs(corr_freq))
+
+
+def test_check_timeseries_input():
+    import numpy as np
+    from itertools import combinations
+    from brainiak.utils.utils import _check_timeseries_input
+
+    # Set a fixed vector for comparison
+    vector = np.random.randn(60)
+
+    # List of subjects with one voxel/ROI
+    list_1d = [vector for _ in np.arange(10)]
+    (data_list_1d, n_TRs,
+     n_voxels, n_subjects) = _check_timeseries_input(list_1d)
+    assert n_TRs == 60
+    assert n_voxels == 1
+    assert n_subjects == 10
+
+    # Array of subjects with one voxel/ROI
+    array_2d = np.hstack([vector[:, np.newaxis]
+                          for _ in np.arange(10)])
+    (data_array_2d, n_TRs,
+     n_voxels, n_subjects) = _check_timeseries_input(array_2d)
+    assert n_TRs == 60
+    assert n_voxels == 1
+    assert n_subjects == 10
+
+    # List of 2-dimensional arrays
+    list_2d = [vector[:, np.newaxis] for _ in np.arange(10)]
+    (data_list_2d, n_TRs,
+     n_voxels, n_subjects) = _check_timeseries_input(list_2d)
+    assert n_TRs == 60
+    assert n_voxels == 1
+    assert n_subjects == 10
+
+    # Check if lists have mismatching size
+    list_bad = [list_2d[0][:-1, :]] + list_2d[1:]
+    with pytest.raises(ValueError):
+        (data_list_bad, _, _, _) = _check_timeseries_input(list_bad)
+
+    # List of 3-dimensional arrays
+    list_3d = [vector[:, np.newaxis, np.newaxis]
+               for _ in np.arange(10)]
+    (data_list_3d, n_TRs,
+     n_voxels, n_subjects) = _check_timeseries_input(list_3d)
+    assert n_TRs == 60
+    assert n_voxels == 1
+    assert n_subjects == 10
+
+    # 3-dimensional array
+    array_3d = np.dstack([vector[:, np.newaxis]
+                          for _ in np.arange(10)])
+    (data_array_3d, n_TRs,
+     n_voxels, n_subjects) = _check_timeseries_input(array_3d)
+    assert n_TRs == 60
+    assert n_voxels == 1
+    assert n_subjects == 10
+
+    # Check that 4-dimensional input array throws error
+    array_4d = array_3d[..., np.newaxis]
+    with pytest.raises(ValueError):
+        (data_array_4d, _, _, _) = _check_timeseries_input(array_4d)
+
+    # Check they're the same
+    for pair in combinations([data_list_1d, data_array_2d,
+                              data_list_2d, data_list_3d,
+                              data_array_3d], 2):
+        assert np.array_equal(pair[0], pair[1])
+
+    # List of multivoxel arrays
+    matrix = np.random.randn(60, 30)
+    list_mv = [matrix
+               for _ in np.arange(10)]
+    (data_list_mv, n_TRs,
+     n_voxels, n_subjects) = _check_timeseries_input(list_mv)
+    assert n_TRs == 60
+    assert n_voxels == 30
+    assert n_subjects == 10
+
+    # 3-dimensional array with multiple voxels
+    array_mv = np.dstack([matrix for _ in np.arange(10)])
+    (data_array_mv, n_TRs,
+     n_voxels, n_subjects) = _check_timeseries_input(array_mv)
+    assert n_TRs == 60
+    assert n_voxels == 30
+    assert n_subjects == 10
+
+    assert np.array_equal(data_list_mv, data_array_mv)
+
+
 if __name__ == '__main__':
     test_isc_input()
     test_isc_options()
@@ -880,4 +1168,7 @@ if __name__ == '__main__':
     test_isfc_options()
     test_isfc_nans()
     test_squareform_isfc()
+    test_p_from_null()
+    test_phase_randomize()
+    test_check_timeseries_input()
     logger.info("Finished all ISC tests")
