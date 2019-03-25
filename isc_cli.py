@@ -51,13 +51,13 @@ def parse_arguments(args):
     readability/transparency.
 
     Example usage:
-        isc_cli.py --input s1.nii.gz s2.nii.gz s3.nii.gz \\
+        python3 isc_cli.py --input s1.nii.gz s2.nii.gz s3.nii.gz \\
         --output isc.nii.gz --mask mask.nii.gz --zscore
 
-        isc_cli.py --input s*.nii.gz --output isc.nii.gz \\
+        python3 isc_cli.py --input s*.nii.gz --output isc.nii.gz \\
         --mask mask.nii.gz --zscore
 
-        isc_cli.py --input s*.nii.gz --output mean_isc.nii.gz \\
+        python3 isc_cli.py --input s*.nii.gz --output mean_isc.nii.gz \\
         --mask mask.nii.gz --zscore --summarize mean
 
     References:
