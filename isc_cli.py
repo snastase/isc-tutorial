@@ -129,7 +129,7 @@ def load_data(input_arg, mask=None):
         if not data_shape:
             data_shape = input_img.shape
             shape_fn = input_fn
-        if input_img.ndim != 4:
+        if len(input_img.shape) != 4:
             raise ValueError("input files should be 4-dimensional "
                              "(three spatial dimensions plus time)")
         if input_img.shape != data_shape:

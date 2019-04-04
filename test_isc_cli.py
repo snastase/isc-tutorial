@@ -71,10 +71,10 @@ def test_parse_arguments():
 
 def test_load_mask():
 
-    i, j, k, n_TRs = 10, 10, 10, 300
+    i, j, k = 10, 10, 10
 
     # Create dummy mask image
-    mask_img = simulate_nifti(65, 77, 49, mask=True)
+    mask_img = simulate_nifti(i, j, k, mask=True)
 
     # Create a temporary directory to load files froom
     with tempfile.TemporaryDirectory() as temp_dir:
