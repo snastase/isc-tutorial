@@ -349,7 +349,6 @@ def isfc(data, targets=None, pairwise=False, summary_statistic=None,
         return isfcs
 
 
-
 def _check_isc_input(iscs, pairwise=False):
 
     """Checks ISC inputs for statistical tests
