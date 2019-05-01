@@ -73,14 +73,18 @@ def parse_arguments(args):
     required.add_argument("-o", "--output", type=str, required=True,
                           help=("NIfTI output filename for ISC values"))
     optional.add_argument("-m", "--mask", type=str,
-                        help=("NIfTI mask file for masking input data"))
+                          help=("NIfTI mask file for masking input data"))
     optional.add_argument("-z", "--zscore", action='store_true',
-                        dest='zscore_data',
-                        help=("Z-score time series for each voxel in input"))
+                          dest='apply_zscore',
+                          help=("Z-score time series for each voxel in input"))
+    optional.add_argument("-f", "--fisherz", action='store_true',
+                          dest='apply_fisherz',
+                          help=("apply Fisher z-transformation (arctanh) "
+                                "to output ISC values"))
     optional.add_argument("-s", "--summarize", type=str,
-                        choices=['mean', 'median'],
-                        help=("summarize results across participants "
-                              "using either 'mean' or 'median'"))
+                          choices=['mean', 'median'],
+                          help=("summarize results across participants "
+                                "using either 'mean' or 'median'"))
     optional.add_argument("-v", "--verbosity", type=int,
                           choices=[1, 2, 3, 4, 5], default=3,
                           help=("increase output verbosity via "
@@ -264,8 +268,8 @@ def main(args):
     data, affine, header = load_data(args.input, mask=mask)
 
     # Optionally z-score data
-    if args.zscore_data:
-        data = zscore(data)
+    if args.apply_zscore:
+        data = zscore(data, axis=0)
         logging.info("z-scored input data prior to computing ISCs")
 
     # Compute ISCs
@@ -275,6 +279,10 @@ def main(args):
     if args.summarize and iscs.shape[0] > 1:
         iscs = summarize_iscs(iscs,
                               summary_statistic=args.summarize)
+
+    # Optinally apply Fisher z-transformation to output ISCs
+    if args.apply_fisherz:
+        iscs = np.arctanh(iscs)
 
     # Save output ISCs to file
     save_data(iscs, affine, header, args.output,

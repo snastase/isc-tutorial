@@ -56,17 +56,32 @@ def test_parse_arguments():
     assert args.mask == None
     assert args.summarize == None
     assert args.verbosity == 3
-    assert args.zscore_data == False
+    assert args.apply_zscore == False
+    assert args.apply_fisherz == False
 
     # Check optional arguments
     args = parse_arguments(['--input', 's1.nii.gz', 's2.nii.gz',
                             's3.nii.gz', '--output', 'isc.nii.gz',
                             '--mask', 'mask.nii.gz', '--zscore',
-                            '--summarize', 'mean', '--verbosity', '2'])
+                            '--fisherz', '--summarize', 'mean',
+                            '--verbosity', '2'])
     assert args.mask == 'mask.nii.gz'
     assert args.summarize == 'mean'
     assert args.verbosity == 2
-    assert args.zscore_data == True
+    assert args.apply_zscore == True
+    assert args.apply_fisherz == True
+
+    # Check abbreviated arguments
+    args = parse_arguments(['-i', 's1.nii.gz', 's2.nii.gz',
+                            's3.nii.gz', '-o', 'isc.nii.gz',
+                            '-m', 'mask.nii.gz', '-z',
+                            '-f', '-s', 'mean',
+                            '-v', '2'])
+    assert args.mask == 'mask.nii.gz'
+    assert args.summarize == 'mean'
+    assert args.verbosity == 2
+    assert args.apply_zscore == True
+    assert args.apply_fisherz == True
 
 
 def test_load_mask():
@@ -259,8 +274,8 @@ def test_main():
         main(['--input', join(temp_dir, 'tmp_s*.nii.gz'),
               '--output', join(temp_dir, 'tmp_iscs.nii.gz'),
               '--mask', join(temp_dir, 'tmp_mask.nii.gz'),
-              '--zscore', '--summarize', 'mean', '--verbosity',
-              '4'])
+              '--zscore', '--fisherz', '--summarize', 'mean',
+              '--verbosity', '4'])
 
 
 if __name__ == '__main__':
