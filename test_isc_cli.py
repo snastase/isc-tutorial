@@ -8,9 +8,9 @@ import nibabel as nib
 from test_isc_standalone import (simulated_timeseries,
                                  correlated_timeseries)
 from isc_cli import (parse_arguments, load_mask,
-                     load_data, compute_iscs,
-                     summarize_iscs, save_data,
-                     main)
+                     load_data, array_correlation,
+                     compute_iscs, summarize_iscs,
+                     save_data, main)
 
 
 def simulate_nifti(i, j, k, n_TRs=None, noise=None,
@@ -161,6 +161,65 @@ def test_load_data():
                           n_subjects)
 
 
+def test_array_correlation():
+    import numpy as np
+    from brainiak.utils.utils import array_correlation
+    from scipy.stats import pearsonr
+
+    # Minimal array datasets
+    n_TRs = 30
+    n_voxels = 2
+    x, y = (np.random.randn(n_TRs, n_voxels),
+            np.random.randn(n_TRs, n_voxels))
+
+    # Perform the correlation
+    r = array_correlation(x, y)
+
+    # Check there are the right number of voxels in the output
+    assert r.shape == (n_voxels,)
+
+    # Check that this (roughly) matches corrcoef
+    assert np.allclose(r, np.corrcoef(x.T, y.T)[[0, 1], [2, 3]])
+
+    # Check that this (roughly) matches pearsonr
+    assert np.allclose(r, np.array([pearsonr(x[:, 0], y[:, 0])[0],
+                                    pearsonr(x[:, 1], y[:, 1])[0]]))
+
+    # Try axis argument
+    assert np.allclose(array_correlation(x, y, axis=0),
+                       array_correlation(x.T, y.T, axis=1))
+
+    # Trigger shape mismatch error
+    with pytest.raises(ValueError):
+        array_correlation(x, y[:, 0])
+
+    with pytest.raises(ValueError):
+        array_correlation(x, y[:-1])
+
+    # Feed in lists
+    _ = array_correlation(x.tolist(), y)
+    _ = array_correlation(x, y.tolist())
+    _ = array_correlation(x.tolist(), y.tolist())
+
+    # Check 1D array input
+    x, y = (np.random.randn(n_TRs),
+            np.random.randn(n_TRs))
+
+    assert type(array_correlation(x, y)) == np.float64
+    assert np.isclose(array_correlation(x, y),
+                      pearsonr(x, y)[0])
+
+    # 1D list inputs
+    _ = array_correlation(x.tolist(), y)
+    _ = array_correlation(x, y.tolist())
+    _ = array_correlation(x.tolist(), y.tolist())
+
+    # Check integer inputs
+    x, y = (np.random.randint(0, 9, (n_TRs, n_voxels)),
+            np.random.randint(0, 9, (n_TRs, n_voxels)))
+    _ = array_correlation(x, y)
+
+
 def test_compute_iscs():
 
     # Set parameters for toy time series data
@@ -282,6 +341,7 @@ if __name__ == '__main__':
     test_parse_arguments()
     test_load_mask()
     test_load_data()
+    test_array_correlation()
     test_compute_iscs()
     test_summarize_iscs()
     test_save_data()

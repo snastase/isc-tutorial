@@ -7,7 +7,7 @@ import textwrap
 from glob import glob
 import numpy as np
 import nibabel as nib
-from scipy.stats import pearsonr, zscore
+from scipy.stats import zscore
 
 
 # Set up logger first
@@ -39,11 +39,13 @@ def parse_arguments(args):
     space) prior to ISC analysis. The --zscore argument indicates that response
     time series should be z-scored (per voxel) prior to ISC analysis; this may
     be important when computing the average time series for N–1 subjects. The
+    --fisherz option can be used to apply the Fisher z-transformation (arctanh)
+    to the output ISC values (e.g., for subsequent statistical tests). The
     --summarize option can be used to computer either the mean or median ISC
     value across left-out subjects after completing the ISC analysis (in which
     case the output file will only have one sample). If mean ISC values are
-    requested ISC values are Fisher Z-transformed, the mean is computed, and
-    then the mean is inverse Fisher Z-transformed. This program requires an
+    requested ISC values are Fisher z-transformed, the mean is computed, and
+    then the mean is inverse Fisher z-transformed. This program requires an
     installation of Python 3 with the NumPy/SciPy and NiBabel modules. The
     implementation is based on the BrainIAK (https://brainiak.org)
     implementation, but does not require a BrainIAK installation. Note that
@@ -171,6 +173,38 @@ def load_data(input_arg, mask=None):
     return data, affine, header
 
 
+# Function to efficiently compute correlations across voxels
+def array_correlation(x, y, axis=0):
+
+    # Accommodate array-like inputs
+    if not isinstance(x, np.ndarray):
+        x = np.asarray(x)
+    if not isinstance(y, np.ndarray):
+        y = np.asarray(y)
+
+    # Check that inputs are same shape
+    if x.shape != y.shape:
+        raise ValueError("Input arrays must be the same shape")
+
+    # Transpose if axis=1 requested (to avoid broadcasting
+    # issues introduced by switching axis in mean and sum)
+    if axis == 1:
+        x, y = x.T, y.T
+
+    # Center (de-mean) input variables
+    x_demean = x - np.mean(x, axis=0)
+    y_demean = y - np.mean(y, axis=0)
+
+    # Compute summed product of centered variables
+    numerator = np.sum(x_demean * y_demean, axis=0)
+
+    # Compute sum squared error
+    denominator = np.sqrt(np.sum(x_demean ** 2, axis=0) *
+                          np.sum(y_demean ** 2, axis=0))
+
+    return numerator / denominator
+
+
 # Function to compute leave-one-out ISCs on input data
 def compute_iscs(data):
 
@@ -182,23 +216,22 @@ def compute_iscs(data):
         logger.warning("only two subjects provided! simply "
                        "computing ISC between them")
 
-    # Loop over each voxel or ROI
-    voxel_iscs = []
-    for v in np.arange(data.shape[1]):
-        voxel_data = data[:, v, :].T
+        # Compute correlation for each corresponding voxel
+        iscs = array_correlation(data[..., 0],
+                                 data[..., 1])[np.newaxis, :]
 
-        # Compute Pearson correlations between voxel time series
-        if n_subjects == 2:
-            iscs = pearsonr(voxel_data[0, :], voxel_data[1, :])[0]
-        else:
-            iscs = np.array([pearsonr(subject,
-                                      np.nanmean(np.delete(
-                                                  voxel_data,
-                                                  s, axis=0),
-                                                 axis=0))[0]
-                             for s, subject in enumerate(voxel_data)])
-        voxel_iscs.append(iscs)
-    iscs = np.column_stack(voxel_iscs)
+    # Loop through left-out subjects
+    else:
+        iscs_stack = []
+        for s in np.arange(n_subjects):
+
+            # Correlation between left-out subject and mean of others
+            iscs_stack.append(array_correlation(
+                data[..., s],
+                np.nanmean(np.delete(data, s, axis=2), axis=2)))
+
+        iscs = np.array(iscs_stack)
+
     logger.info("finished computing ISCs")
 
     return iscs
