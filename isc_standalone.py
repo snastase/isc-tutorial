@@ -16,7 +16,10 @@
 
 Functions for computing intersubject correlation (ISC) and related
 analyses (e.g., intersubject funtional correlations; ISFC), as well
-as statistical tests designed specifically for ISC analyses.
+as statistical tests designed specifically for ISC analyses. This
+"standalone" module is specifically intended to replicate the BrainIAK
+(https://brainiak.org) ISC functionality without requiring an
+installation of BrainIAK.
 
 The implementation is based on the work in [Hasson2004]_, [Kauppi2014]_,
 [Simony2016]_, and [Chen2016]_.
@@ -62,6 +65,7 @@ import itertools
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "array_correlation",
     "bootstrap_isc",
     "compute_summary_statistic",
     "isfc",
@@ -78,7 +82,6 @@ MAX_RANDOM_SEED = 2**32 - 1
 
 def isc(data, pairwise=False, summary_statistic=None, tolerate_nans=True):
     """Intersubject correlation
-
     For each voxel or ROI, compute the Pearson correlation between each
     subject's response time series and other subjects' response time series.
     If pairwise is False (default), use the leave-one-out approach, where
@@ -151,22 +154,43 @@ def isc(data, pairwise=False, summary_statistic=None, tolerate_nans=True):
         mean = np.mean
     data, mask = _threshold_nans(data, tolerate_nans)
 
-    # Loop over each voxel or ROI
-    voxel_iscs = []
-    for v in np.arange(data.shape[1]):
-        voxel_data = data[:, v, :].T
-        if n_subjects == 2:
-            iscs = pearsonr(voxel_data[0, :], voxel_data[1, :])[0]
-        elif pairwise:
+    # Compute correlation for only two participants
+    if n_subjects == 2:
+
+        # Compute correlation for each corresponding voxel
+        iscs_stack = array_correlation(data[..., 0],
+                                       data[..., 1])[np.newaxis, :]
+
+    # Compute pairwise ISCs using voxel loop and corrcoef for speed
+    elif pairwise:
+
+        # Swap axes for np.corrcoef
+        data = np.swapaxes(data, 2, 0)
+
+        # Loop through voxels
+        voxel_iscs = []
+        for v in np.arange(data.shape[1]):
+            voxel_data = data[:, v, :]
+
+            # Correlation matrix for all pairs of subjects (triangle)
             iscs = squareform(np.corrcoef(voxel_data), checks=False)
-        elif not pairwise:
-            iscs = np.array([pearsonr(subject,
-                                      mean(np.delete(voxel_data,
-                                                     s, axis=0),
-                                           axis=0))[0]
-                             for s, subject in enumerate(voxel_data)])
-        voxel_iscs.append(iscs)
-    iscs_stack = np.column_stack(voxel_iscs)
+            voxel_iscs.append(iscs)
+
+        iscs_stack = np.column_stack(voxel_iscs)
+
+    # Compute leave-one-out ISCs
+    elif not pairwise:
+
+        # Loop through left-out subjects
+        iscs_stack = []
+        for s in np.arange(n_subjects):
+
+            # Correlation between left-out subject and mean of others
+            iscs_stack.append(array_correlation(
+                data[..., s],
+                mean(np.delete(data, s, axis=2), axis=2)))
+
+        iscs_stack = np.array(iscs_stack)
 
     # Get ISCs back into correct shape after masking out NaNs
     iscs = np.full((iscs_stack.shape[0], n_voxels), np.nan)
@@ -1717,6 +1741,67 @@ def _check_timeseries_input(data):
                     n_subjects, n_TRs, n_voxels))
 
     return data, n_TRs, n_voxels, n_subjects
+
+
+def array_correlation(x, y, axis=0):
+
+    """Column- or row-wise Pearson correlation between two arrays
+    Computes sample Pearson correlation between two 1D or 2D arrays (e.g.,
+    two n_TRs by n_voxels arrays). For 2D arrays, computes correlation
+    between each corresponding column (axis=0) or row (axis=1) where axis
+    indexes observations. If axis=0 (default), each column is considered to
+    be a variable and each row is an observation; if axis=1, each row is a
+    variable and each column is an observation (equivalent to transposing
+    the input arrays). Input arrays must be the same shape with corresponding
+    variables and observations. This is intended to be an efficient method
+    for computing correlations between two corresponding arrays with many
+    variables (e.g., many voxels).
+
+    Parameters
+    ----------
+    x : 1D or 2D ndarray
+        Array of observations for one or more variables
+
+    y : 1D or 2D ndarray
+        Array of observations for one or more variables (same shape as x)
+
+    axis : int (0 or 1), default: 0
+        Correlation between columns (axis=0) or rows (axis=1)
+
+    Returns
+    -------
+    r : float or 1D ndarray
+        Pearson correlation values for input variables
+
+    """
+
+    # Accommodate array-like inputs
+    if not isinstance(x, np.ndarray):
+        x = np.asarray(x)
+    if not isinstance(y, np.ndarray):
+        y = np.asarray(y)
+
+    # Check that inputs are same shape
+    if x.shape != y.shape:
+        raise ValueError("Input arrays must be the same shape")
+
+    # Transpose if axis=1 requested (to avoid broadcasting
+    # issues introduced by switching axis in mean and sum)
+    if axis == 1:
+        x, y = x.T, y.T
+
+    # Center (de-mean) input variables
+    x_demean = x - np.mean(x, axis=0)
+    y_demean = y - np.mean(y, axis=0)
+
+    # Compute summed product of centered variables
+    numerator = np.sum(x_demean * y_demean, axis=0)
+
+    # Compute sum squared error
+    denominator = np.sqrt(np.sum(x_demean ** 2, axis=0) *
+                          np.sum(y_demean ** 2, axis=0))
+
+    return numerator / denominator
 
 
 def load_images(image_paths: Iterable[Union[str, Path]]

@@ -3,8 +3,14 @@ import logging
 import pytest
 from isc_standalone import (isc, isfc, bootstrap_isc, permutation_isc,
                             squareform_isfc, timeshift_isc,
-                            phaseshift_isc)
+                            phaseshift_isc, phase_randomize,
+                            p_from_null, array_correlation,
+                            _check_timeseries_input)
 from scipy.spatial.distance import squareform
+from scipy.stats import pearsonr
+from scipy.fftpack import fft
+from itertools import combinations
+
 
 logger = logging.getLogger(__name__)
 
@@ -942,8 +948,6 @@ def test_squareform_isfc():
 
 
 def test_p_from_null():
-    import numpy as np
-    from brainiak.utils.utils import p_from_null
 
     # Create random null and observed value in tail
     null = np.random.randn(10000)
@@ -1006,11 +1010,8 @@ def test_p_from_null():
 
 
 def test_phase_randomize():
-    import numpy as np
-    from scipy.fftpack import fft
-    from scipy.stats import pearsonr
-    from brainiak.utils.utils import phase_randomize
 
+    # Create time series data
     data = np.repeat(np.repeat(np.random.randn(60)[:, np.newaxis, np.newaxis],
                                30, axis=1),
                      20, axis=2)
@@ -1069,9 +1070,6 @@ def test_phase_randomize():
 
 
 def test_check_timeseries_input():
-    import numpy as np
-    from itertools import combinations
-    from brainiak.utils.utils import _check_timeseries_input
 
     # Set a fixed vector for comparison
     vector = np.random.randn(60)
@@ -1154,6 +1152,62 @@ def test_check_timeseries_input():
     assert n_subjects == 10
 
     assert np.array_equal(data_list_mv, data_array_mv)
+
+    
+def test_array_correlation():
+
+    # Minimal array datasets
+    n_TRs = 30
+    n_voxels = 2
+    x, y = (np.random.randn(n_TRs, n_voxels),
+            np.random.randn(n_TRs, n_voxels))
+
+    # Perform the correlation
+    r = array_correlation(x, y)
+
+    # Check there are the right number of voxels in the output
+    assert r.shape == (n_voxels,)
+
+    # Check that this (roughly) matches corrcoef
+    assert np.allclose(r, np.corrcoef(x.T, y.T)[[0, 1], [2, 3]])
+
+    # Check that this (roughly) matches pearsonr
+    assert np.allclose(r, np.array([pearsonr(x[:, 0], y[:, 0])[0],
+                                    pearsonr(x[:, 1], y[:, 1])[0]]))
+
+    # Try axis argument
+    assert np.allclose(array_correlation(x, y, axis=0),
+                       array_correlation(x.T, y.T, axis=1))
+
+    # Trigger shape mismatch error
+    with pytest.raises(ValueError):
+        array_correlation(x, y[:, 0])
+
+    with pytest.raises(ValueError):
+        array_correlation(x, y[:-1])
+
+    # Feed in lists
+    _ = array_correlation(x.tolist(), y)
+    _ = array_correlation(x, y.tolist())
+    _ = array_correlation(x.tolist(), y.tolist())
+
+    # Check 1D array input
+    x, y = (np.random.randn(n_TRs),
+            np.random.randn(n_TRs))
+
+    assert type(array_correlation(x, y)) == np.float64
+    assert np.isclose(array_correlation(x, y),
+                      pearsonr(x, y)[0])
+
+    # 1D list inputs
+    _ = array_correlation(x.tolist(), y)
+    _ = array_correlation(x, y.tolist())
+    _ = array_correlation(x.tolist(), y.tolist())
+
+    # Check integer inputs
+    x, y = (np.random.randint(0, 9, (n_TRs, n_voxels)),
+            np.random.randint(0, 9, (n_TRs, n_voxels)))
+    _ = array_correlation(x, y)
 
 
 if __name__ == '__main__':
