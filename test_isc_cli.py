@@ -118,12 +118,12 @@ def test_load_data():
             data_img.to_filename(join(temp_dir,
                                       'tmp_s{0}.nii.gz'.format(
                                           subject)))
-        data, affine, header = load_data(glob(
+        data, affine, header, input_fns = load_data(glob(
             join(temp_dir, 'tmp_s*.nii.gz')))
 
         # Check for exception if we only get one input file
         with pytest.raises(ValueError):
-            data, affine, header = load_data(glob(
+            data, affine, header, input_fns = load_data(glob(
                 join(temp_dir, 'tmp_s1.nii.gz')))
 
         # Create datasets with only 3 dimensions
@@ -138,7 +138,7 @@ def test_load_data():
                                           subject)))
 
         with pytest.raises(ValueError):
-            data, affine, header = load_data(glob(
+            data, affine, header, input_fns = load_data(glob(
                         join(temp_dir, 'tmp_s*.nii.gz')))
 
         # Create mismatching sized datasets
@@ -153,7 +153,7 @@ def test_load_data():
                                           subject)))
 
         with pytest.raises(ValueError):
-            data, affine, header = load_data(glob(
+            data, affine, header, input_fns = load_data(glob(
                         join(temp_dir, 'tmp_s*.nii.gz')))
 
     assert np.array_equal(affine, np.eye(4))
@@ -233,21 +233,23 @@ def test_compute_iscs():
                                 random_state=random_state)
 
     # Check basic computation and output shape
-    iscs = compute_iscs(data)
+    assert type(compute_iscs(data)) == list
+
+    iscs = np.vstack(compute_iscs(data))
     assert iscs.shape == (n_subjects, n_voxels)
 
     # Just two subjects
-    iscs = compute_iscs(data[..., :2])
+    iscs = np.array(compute_iscs(data[..., :2]))
     assert iscs.shape == (1, n_voxels)
 
     # Correlated time series
     data = correlated_timeseries(20, 60, noise=0,
                                  random_state=42)
-    iscs = compute_iscs(data)
+    iscs = np.vstack(compute_iscs(data))
     assert np.allclose(iscs[:, :2], 1., rtol=1e-05)
     assert np.all(iscs[:, -1] < 1.)
 
-    iscs = compute_iscs(data)
+    iscs = np.vstack(compute_iscs(data))
     assert np.allclose(iscs[:, :2], 1., rtol=1e-05)
     assert np.all(iscs[:, -1] < 1.)
 
@@ -284,6 +286,10 @@ def test_summarize_iscs():
     assert np.array_equal(summarize_iscs(iscs, 'median'),
                           np.array([[central, central]]))
 
+    # Check stack summarization
+    assert np.array_equal(summarize_iscs(iscs, 'stack'),
+                          np.array(iscs))
+
 
 def test_save_data():
 
@@ -296,7 +302,7 @@ def test_save_data():
 
     # Create a temporary directory to save files
     with tempfile.TemporaryDirectory() as temp_dir:
-        save_data(iscs, affine, header,
+        save_data(iscs, affine, header, 'fake_input.nii.gz',
                   join(temp_dir, 'test_iscs.nii.gz'),
                   mask_indices=mask_indices)
 
@@ -320,7 +326,7 @@ def test_main():
 
     mask_img = simulate_nifti(i, j, k, mask=True)
 
-    # Create a temporary directory to load files froom
+    # Create a temporary directory to load files from
     with tempfile.TemporaryDirectory() as temp_dir:
 
         for subject, data_img in enumerate(data_imgs):
@@ -331,9 +337,53 @@ def test_main():
         mask_img.to_filename(join(temp_dir, 'tmp_mask.nii.gz'))
 
         main(['--input', join(temp_dir, 'tmp_s*.nii.gz'),
-              '--output', join(temp_dir, 'tmp_iscs.nii.gz'),
+              '--output', join(temp_dir, 'tmp_mean_iscs.nii.gz'),
               '--mask', join(temp_dir, 'tmp_mask.nii.gz'),
               '--zscore', '--fisherz', '--summarize', 'mean',
+              '--verbosity', '4'])
+
+    # Try it with median and fewer options
+    with tempfile.TemporaryDirectory() as temp_dir:
+
+        for subject, data_img in enumerate(data_imgs):
+            data_img.to_filename(join(temp_dir,
+                                      'tmp_s{0}.nii.gz'.format(
+                                          subject)))
+
+        main(['--input', join(temp_dir, 'tmp_s*.nii.gz'),
+              '--output', join(temp_dir, 'median_nomask_isc.nii.gz'),
+              '--summarize', 'stack', '--verbosity', '4'])
+
+    # Try it with stack
+    with tempfile.TemporaryDirectory() as temp_dir:
+
+        for subject, data_img in enumerate(data_imgs):
+            data_img.to_filename(join(temp_dir,
+                                      'tmp_s{0}.nii.gz'.format(
+                                          subject)))
+
+        mask_img.to_filename(join(temp_dir, 'tmp_mask.nii.gz'))
+
+        main(['--input', join(temp_dir, 'tmp_s*.nii.gz'),
+              '--output', join(temp_dir, 'stack_isc.nii.gz'),
+              '--mask', join(temp_dir, 'tmp_mask.nii.gz'),
+              '--zscore', '--fisherz', '--summarize', 'stack',
+              '--verbosity', '4'])
+
+    # Now with suffix and no summarization
+    with tempfile.TemporaryDirectory() as temp_dir:
+
+        for subject, data_img in enumerate(data_imgs):
+            data_img.to_filename(join(temp_dir,
+                                      'tmp_s{0}.nii.gz'.format(
+                                          subject)))
+
+        mask_img.to_filename(join(temp_dir, 'tmp_mask.nii.gz'))
+
+        main(['--input', join(temp_dir, 'tmp_s*.nii.gz'),
+              '--output', join(temp_dir, 'isc.nii.gz'),
+              '--mask', join(temp_dir, 'tmp_mask.nii.gz'),
+              '--zscore', '--fisherz',
               '--verbosity', '4'])
 
 
