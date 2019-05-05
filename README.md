@@ -11,16 +11,16 @@ This notebook is geared toward early-career cognitive neuroscientists (e.g., gra
 In addition to the tutorial, this repo contains several other tools: 1. a "standalone" suite of ISC functions for mimicking BrainIAK's ISC functionality without a BrainIAK installation ([`isc_standalone.py`](https://github.com/snastase/isc-tutorial/blob/master/isc_standalone.py); may be slower than the BrainIAK implementation); 2. MATLAB code for computing leave-one-out ISCs ([`isc_loo.m`](https://github.com/snastase/isc-tutorial/blob/master/isc_loo.m)); 3. a Python-based command-line interface for computing leave-one-out ISCs ([`isc_cli.py`](https://github.com/snastase/isc-tutorial/blob/master/isc_cli.py); requires a Python 3 installation with NumPy/SciPy and NiBabel on Linux or Mac); 4. several files for unit testing and generating figures in the manuscript. Given two or more NIfTI images containing BOLD time series (one file per subject), the command-line tool computes leave-one-out ISCs with a variety of options for supplying a mask image, z-scoring inputs, and Fisher z-transforming or summarizing the output (see `python3 isc_cli.py --help` for more detailed documentation). Usage example:
 ```python
 # Three subjects in working directory with mask and no summarization
-python3 isc_cli.py --input s1.nii.gz s2.nii.gz s3.nii.gz --output isc.nii.gz \
-                   --mask mask.nii.gz --zscore
+python3 isc_cli.py \-\-input s1.nii.gz s2.nii.gz s3.nii.gz \-\-output isc.nii.gz \\
+                   \-\-mask mask.nii.gz \-\-zscore
 
 # Wildcard subject IDs with full paths and Fisher z-transformation
-pyhon3 isc_cli.py --input /input/path/s*.nii.gz --output /output/path/isc.nii.gz \
-                  --mask /input/path/mask.nii.gz --zscore --fisherz
+pyhon3 isc_cli.py \-\-input /input/path/s*.nii.gz \-\-output /output/path/isc.nii.gz \\
+                  \-\-mask /input/path/mask.nii.gz \-\-zscore \-\-fisherz
 
 # Compute ISCs and return mean across left-out subjects
-python3 isc_cli.py --input s*.nii.gz --output mean_isc.nii.gz \
-                   --mask mask.nii.gz --zscore --summarize mean
+python3 isc_cli.py \-\-input s*.nii.gz \-\-output mean_isc.nii.gz \\
+                   \-\-mask mask.nii.gz \-\-zscore \-\-summarize mean
 ```
 
 ### What is ISC analysis?
