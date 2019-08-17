@@ -1,5 +1,6 @@
 [![Build Status](https://travis-ci.com/snastase/isc-tutorial.svg?branch=master)](https://travis-ci.com/snastase/isc-tutorial)
 [![codecov](https://codecov.io/gh/snastase/isc-tutorial/branch/master/graph/badge.svg)](https://codecov.io/gh/snastase/isc-tutorial)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 # Intersubject correlation tutorial
 This repo accompanies the manuscript "Measuring shared responses across subjects using intersubject correlation" by Nastase, Gazzola, Hasson, and Keysers ([2019](https://doi.org/10.1101/600114)). Here, you'll find a Jupyter Notebook tutorial ([`isc_tutorial.ipynb`](https://github.com/snastase/isc-tutorial/blob/master/isc_tutorial.ipynb)) introducing basic intersubject correlation (ISC) analyses and statistical tests as implemented in Python using the Brain Imaging Analysis Kit ([BrainIAK](http://brainiak.org/)). The notebook uses both simulated data and a publicly available fMRI dataset. Using Google Colaboratory, you can run the analyses interactively in the tutorial notebook entirely in the cloud. To navigate directly to the notebook on Google Colab, click here: [**Tutorial on Google Colab**](https://colab.research.google.com/drive/1EHI9buw-nvj5UDNg7MWUiQ1ITVJSswtH).
