@@ -1,0 +1,12 @@
+brainiak
+coverage
+flake8
+jupyter
+matplotlib
+nibabel
+nilearn
+numpy
+pytest
+scipy
+seaborn
+statsmodels

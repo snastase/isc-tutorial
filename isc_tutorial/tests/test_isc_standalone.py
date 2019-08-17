@@ -1,11 +1,12 @@
 import numpy as np
 import logging
 import pytest
-from isc_standalone import (isc, isfc, bootstrap_isc, permutation_isc,
-                            squareform_isfc, timeshift_isc,
-                            phaseshift_isc, phase_randomize,
-                            p_from_null, array_correlation,
-                            _check_timeseries_input)
+from isc_tutorial.isc_standalone import (isc, isfc, bootstrap_isc,
+                                         permutation_isc, squareform_isfc,
+                                         timeshift_isc, phaseshift_isc,
+                                         phase_randomize, p_from_null,
+                                         array_correlation,
+                                         _check_timeseries_input)
 from scipy.spatial.distance import squareform
 from scipy.stats import pearsonr
 from scipy.fftpack import fft

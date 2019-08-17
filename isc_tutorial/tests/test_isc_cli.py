@@ -7,10 +7,10 @@ import numpy as np
 import nibabel as nib
 from test_isc_standalone import (simulated_timeseries,
                                  correlated_timeseries)
-from isc_cli import (parse_arguments, load_mask,
-                     load_data, array_correlation,
-                     compute_iscs, summarize_iscs,
-                     save_data, main)
+from isc_tutorial.isc_cli import (parse_arguments, load_mask,
+                                  load_data, array_correlation,
+                                  compute_iscs, summarize_iscs,
+                                  save_data, main)
 
 
 def simulate_nifti(i, j, k, n_TRs=None, noise=None,
@@ -163,7 +163,6 @@ def test_load_data():
 
 def test_array_correlation():
     import numpy as np
-    from brainiak.utils.utils import array_correlation
     from scipy.stats import pearsonr
 
     # Minimal array datasets
