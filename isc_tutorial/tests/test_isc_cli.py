@@ -1,5 +1,4 @@
 import tempfile
-import subprocess
 import pytest
 from glob import glob
 from os.path import join
@@ -27,7 +26,7 @@ def simulate_nifti(i, j, k, n_TRs=None, noise=None,
 
     # Optionally add noise
     if noise:
-        data +- prng.randn(*data.shape) * noise
+        data += prng.randn(*data.shape) * noise
 
     # Optionally binarize image into 1s and 0s mask
     if mask:
@@ -53,11 +52,11 @@ def test_parse_arguments():
                             's3.nii.gz', '--output', 'isc.nii.gz'])
     assert args.input == ['s1.nii.gz', 's2.nii.gz', 's3.nii.gz']
     assert args.output == 'isc.nii.gz'
-    assert args.mask == None
-    assert args.summarize == None
+    assert args.mask is None
+    assert args.summarize is None
     assert args.verbosity == 3
-    assert args.apply_zscore == False
-    assert args.apply_fisherz == False
+    assert args.apply_zscore is False
+    assert args.apply_fisherz is False
 
     # Check optional arguments
     args = parse_arguments(['--input', 's1.nii.gz', 's2.nii.gz',
@@ -68,8 +67,8 @@ def test_parse_arguments():
     assert args.mask == 'mask.nii.gz'
     assert args.summarize == 'mean'
     assert args.verbosity == 2
-    assert args.apply_zscore == True
-    assert args.apply_fisherz == True
+    assert args.apply_zscore is True
+    assert args.apply_fisherz is True
 
     # Check abbreviated arguments
     args = parse_arguments(['-i', 's1.nii.gz', 's2.nii.gz',
@@ -80,8 +79,8 @@ def test_parse_arguments():
     assert args.mask == 'mask.nii.gz'
     assert args.summarize == 'mean'
     assert args.verbosity == 2
-    assert args.apply_zscore == True
-    assert args.apply_fisherz == True
+    assert args.apply_zscore is True
+    assert args.apply_fisherz is True
 
 
 def test_load_mask():
@@ -280,8 +279,8 @@ def test_summarize_iscs():
                      [central, central],
                      [central+.25, central+.25]])
     assert np.allclose(summarize_iscs(iscs, 'mean'),
-                        np.array([[central, central]]),
-                        atol=.1)
+                       np.array([[central, central]]),
+                       atol=.1)
     assert np.array_equal(summarize_iscs(iscs, 'median'),
                           np.array([[central, central]]))
 

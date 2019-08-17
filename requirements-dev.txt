@@ -1,4 +1,4 @@
-brainiak
+codecov
 coverage
 flake8
 jupyter

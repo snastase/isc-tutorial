@@ -1,2 +1,2 @@
 [flake8]
-exclude = .git,__pycache__
+exclude = .git,__pycache_,.ipynb_checkpoints

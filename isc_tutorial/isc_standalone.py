@@ -53,13 +53,12 @@ The implementation is based on the work in [Hasson2004]_, [Kauppi2014]_,
 import numpy as np
 import logging
 from scipy.spatial.distance import squareform
-from scipy.stats import pearsonr
 from scipy.fftpack import fft, ifft
 import itertools as it
 import nibabel as nib
 from nibabel.spatialimages import SpatialImage
 from pathlib import Path
-from typing import Callable, Iterable, List, Sequence, Type, TypeVar, Union
+from typing import Callable, Iterable, Sequence, Type, TypeVar, Union
 import itertools
 
 logger = logging.getLogger(__name__)
@@ -307,9 +306,10 @@ def isfc(data, targets=None, pairwise=False, summary_statistic=None,
 
     # Handle just two subjects properly (for symmetric approach)
     if symmetric and n_subjects == 2:
-        isfcs = np.corrcoef(np.ascontiguousarray(data[..., 0].T),
-                            np.ascontiguousarray(data[..., 1].T))[:data.shape[1],
-                                                                  data.shape[1]:]
+        isfcs = np.corrcoef(
+                    np.ascontiguousarray(data[..., 0].T),
+                    np.ascontiguousarray(data[..., 1].T))[:data.shape[1],
+                                                          data.shape[1]:]
         isfcs = (isfcs + isfcs.T) / 2
         isfcs = isfcs[..., np.newaxis]
         summary_statistic = None
@@ -340,9 +340,9 @@ def isfc(data, targets=None, pairwise=False, summary_statistic=None,
         # Compute leave-one-out ISFCs
         isfcs = [np.corrcoef(np.ascontiguousarray(subject.T),
                              np.ascontiguousarray(mean(
-                                np.delete(targets, s, axis=0),
-                                          axis=0).T))[:data.shape[2],
-                                                      data.shape[2]:]
+                                    np.delete(targets, s, axis=0),
+                                    axis=0).T))[:data.shape[2],
+                                                data.shape[2]:]
                  for s, subject in enumerate(data)]
 
         # Transpose and average ISFC matrices for both directions
@@ -1864,6 +1864,7 @@ def load_boolean_mask(path: Union[str, Path],
 
 
 T = TypeVar("T", bound="MaskedMultiSubjectData")
+
 
 class MaskedMultiSubjectData(np.ndarray):
     """Array with shape n_TRs, n_voxels, n_subjects."""

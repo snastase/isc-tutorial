@@ -307,7 +307,7 @@ def test_bootstrap_isc():
     assert np.all(iscs[:, :2] > .5)
     assert np.all(iscs[:, -1] < .5)
     assert p[0] < .05 and p[1] < .05
-    assert p[2] > .01
+    assert p[2] > .005
 
     iscs = isc(data, pairwise=True)
     observed, ci, p, distribution = bootstrap_isc(iscs, pairwise=True)
@@ -1154,7 +1154,7 @@ def test_check_timeseries_input():
 
     assert np.array_equal(data_list_mv, data_array_mv)
 
-    
+
 def test_array_correlation():
 
     # Minimal array datasets

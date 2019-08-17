@@ -358,7 +358,7 @@ def main(args):
     else:
         mask, mask_indices = None, None
         logger.warning("no mask provided! are you sure you want "
-                        "to compute ISCs for all voxels in image?")
+                       "to compute ISCs for all voxels in image?")
 
     # Load data
     data, affine, header, input_fns = load_data(args.input, mask=mask)
