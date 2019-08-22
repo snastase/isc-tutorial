@@ -3,7 +3,7 @@
 [![codecov](https://codecov.io/gh/snastase/isc-tutorial/branch/master/graph/badge.svg)](https://codecov.io/gh/snastase/isc-tutorial)
 
 # Intersubject correlation tutorial
-This repo accompanies the manuscript "Measuring shared responses across subjects using intersubject correlation" by Nastase, Gazzola, Hasson, and Keysers ([2019](https://doi.org/10.1101/600114)). Here, you'll find a Jupyter Notebook tutorial ([`isc_tutorial.ipynb`](https://github.com/snastase/isc-tutorial/blob/master/isc_tutorial.ipynb)) introducing basic intersubject correlation (ISC) analyses and statistical tests as implemented in Python using the Brain Imaging Analysis Kit ([BrainIAK](http://brainiak.org/)). The notebook uses both simulated data and a publicly available fMRI dataset. Using Google Colaboratory, you can run the analyses interactively in the tutorial notebook entirely in the cloud. To navigate directly to the notebook on Google Colab, click here: [**Tutorial on Google Colab**](https://colab.research.google.com/drive/1EHI9buw-nvj5UDNg7MWUiQ1ITVJSswtH).
+This repo accompanies the article "Measuring shared responses across subjects using intersubject correlation" by Nastase, Gazzola, Hasson, and Keysers ([2019](https://doi.org/10.1093/scan/nsz037)) in the "tools of the trade" series at *Social Cognitive and Affective Neuroscience*. Here, you'll find a Jupyter Notebook tutorial ([`isc_tutorial.ipynb`](https://github.com/snastase/isc-tutorial/blob/master/isc_tutorial.ipynb)) introducing basic intersubject correlation (ISC) analyses and statistical tests as implemented in Python using the Brain Imaging Analysis Kit ([BrainIAK](http://brainiak.org/)). The notebook uses both simulated data and a publicly available fMRI dataset. Using Google Colaboratory, you can run the analyses interactively in the tutorial notebook entirely in the cloud. To navigate directly to the notebook on Google Colab, click here: [**Tutorial on Google Colab**](https://colab.research.google.com/drive/1EHI9buw-nvj5UDNg7MWUiQ1ITVJSswtH).
 
 This notebook is geared toward early-career cognitive neuroscientists (e.g., graduate students) or researchers unfamiliar with ISC analysis. We assume some basic familiarity with Python. The tutorial provides an introductory treatment of the following topics:
 * Computing ISCs
@@ -42,7 +42,7 @@ ISC analyses measure stimulus-evoked responses that are shared across individual
 
 * Lerner, Y., Honey, C. J., Silbert, L. J., & Hasson, U. (2011). Topographic mapping of a hierarchy of temporal receptive windows using a narrated story. *Journal of Neuroscience*, *31*(8), 2906–2915. https://doi.org/10.1523/jneurosci.3684-10.2011
 
-* Nastase, S. A., Gazzola, V., Hasson, U., & Keysers, C. (2019). Measuring shared responses across subjects using intersubject correlation. *bioRxiv*, 600114. https://doi.org/10.1101/600114
+* Nastase, S. A., Gazzola, V., Hasson, U., & Keysers, C. (2019). Measuring shared responses across subjects using intersubject correlation. *Social Cognitive and Affective Neuroscience*, *14*(6), 667–685. https://doi.org/10.1093/scan/nsz037
 
 * Silbert, L. J., Honey, C. J., Simony, E., Poeppel, D., & Hasson, U. (2014). Coupled neural systems underlie the production and comprehension of naturalistic narrative speech. *Proceedings of the National Academy of Sciences of the United States of America*, *111*(43), E4687–E4696. https://doi.org/10.1073/pnas.1323812111
 
